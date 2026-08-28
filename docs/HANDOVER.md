@@ -1,5 +1,16 @@
 # 引継ぎ — 2026-08-28
 
+## Latest update (2026-08-28: master labels, weekly defaults, and safe month deletion)
+
+- UI design reviewed against Microsoft form/label guidance and W3C WAI labels/fieldset guidance. Role master now exposes named columns: role name, display order (smaller appears first), usage status (assigned staff count), and action.
+- Shift-type master uses a wider name column, a narrower abbreviation column, and checkbox-only rows beneath the `勤務日として数える` header; the checkbox keeps an accessible label.
+- NG pairs can optionally target one shift type. No target preserves the old rule (the pair cannot work on the same day); a target prevents both staff from receiving that same target shift type. Existing pairs migrate as no target in SQLite schema version 4.
+- Added weekday × shift type × role staffing defaults. They copy into daily role requirements only when a month is first created; existing months are not modified.
+- Added a dashboard delete action for an existing month. It confirms intent, creates a SQLite Online Backup API snapshot, then transactionally deletes only that month's shifts, conditions, and requirements.
+- Verification: `npm run typecheck` passed; `npm test` passed (6 files, 32 tests); `npm run build` passed; `npm run test:e2e` exited 0. A Windows NSIS test candidate is in `installer_output/ui-review-master-defaults/`; `dist/release/` is untouched.
+- `npm audit --omit=dev`: 0 high/critical; 2 moderate findings through `exceljs` → `uuid`. The available automated remedy downgrades `exceljs` across a breaking version, so compatibility review is required before any formal release.
+- Next: launch the test candidate on Windows and manually exercise role labels, weekly defaults, scoped NG pairs, and deletion. A formal release still requires product metadata/icon, code signing, confirmed E2E reporting, and the moderate-audit compatibility decision.
+
 ## 最新更新（2026-08-28）
 
 - P1の未消化だったSQLiteスキーマ移行、勤務種別の開始/終了時刻、勤務日カウント、雇用区分、職種表示順、NGペア/翌日ルール削除を実装した。既存SQLiteは外部キー/CHECK付きのスキーマバージョン2へトランザクション移行し、参照不整合があれば置換前にロールバックする。旧DBの勤務履歴を保持する回帰テストを追加した。

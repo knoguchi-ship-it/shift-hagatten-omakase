@@ -31,6 +31,7 @@ export const SaveSettingsSchema = z.object({
 export const NgPairSchema = z.object({
   staffId1: PositiveIdSchema,
   staffId2: PositiveIdSchema,
+  shiftTypeId: PositiveIdSchema.nullable().optional(),
 }).refine((pair) => pair.staffId1 !== pair.staffId2, "同じ職員はNGペアにできません");
 export const SequenceRuleSchema = z.object({
   firstShiftTypeId: PositiveIdSchema,
@@ -47,12 +48,19 @@ export const UnavailableConditionSchema = z.object({
   value: z.number().int().nonnegative(),
 });
 export const SaveUnavailableConditionsSchema = z.array(UnavailableConditionSchema);
+export const WeeklyRoleRequirementSchema = z.object({
+  weekday: z.number().int().min(0).max(6),
+  shiftTypeId: PositiveIdSchema,
+  roleId: PositiveIdSchema,
+  requiredCount: z.number().int().min(0),
+});
 export const SaveConfigurationSchema = z.object({
   staff: z.array(StaffSchema),
   shiftTypes: z.array(ShiftTypeSchema),
   ngPairs: z.array(NgPairSchema),
   sequenceRules: z.array(SequenceRuleSchema),
   unavailableConditions: z.array(UnavailableConditionSchema),
+  weeklyRoleRequirements: z.array(WeeklyRoleRequirementSchema),
 });
 export const RoleRequirementSchema = z.object({
   targetDate: DateKeySchema,

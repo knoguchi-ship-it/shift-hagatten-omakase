@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld("shiftApi", {
     return () => ipcRenderer.removeListener("generate:error", handler);
   },
   createMonth: (month: string) => ipcRenderer.invoke("app:create-month", month),
+  deleteMonth: (month: string) => ipcRenderer.invoke("app:delete-month", month),
   getMonth: (month: string) => ipcRenderer.invoke("app:get-month", month),
   setUnsavedChanges: (hasUnsavedChanges: boolean) =>
     ipcRenderer.invoke("app:set-unsaved-changes", hasUnsavedChanges),

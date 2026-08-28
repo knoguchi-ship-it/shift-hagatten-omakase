@@ -39,6 +39,30 @@ function buildUnavailableIndex(unavailableConditions: UnavailableCondition[]) {
   };
 }
 
+function isNgPairConflict(
+  firstId: number,
+  firstShiftTypeId: number | null | undefined,
+  secondId: number,
+  secondShiftTypeId: number | null | undefined,
+  ngPairs: NgPair[],
+  isWorkType: (shiftTypeId: number) => boolean,
+) {
+  return ngPairs.some((pair) => {
+    const matches =
+      (pair.staffId1 === firstId && pair.staffId2 === secondId) ||
+      (pair.staffId1 === secondId && pair.staffId2 === firstId);
+    if (!matches) return false;
+    if (pair.shiftTypeId != null)
+      return firstShiftTypeId === pair.shiftTypeId && secondShiftTypeId === pair.shiftTypeId;
+    return (
+      firstShiftTypeId != null &&
+      secondShiftTypeId != null &&
+      isWorkType(firstShiftTypeId) &&
+      isWorkType(secondShiftTypeId)
+    );
+  });
+}
+
 // DB/Electron 非依存の純粋な制約検証。生成後のチェックと、セル編集後の再検証の両方から呼ぶ。
 export function validateCells(
   input: ValidationInput,
@@ -64,12 +88,6 @@ export function validateCells(
     roleRequirements.map((r) => [
       `${r.targetDate}/${r.shiftTypeId}/${r.roleId}`,
       r.requiredCount,
-    ]),
-  );
-  const np = new Set(
-    ngPairs.flatMap((p) => [
-      `${p.staffId1}/${p.staffId2}`,
-      `${p.staffId2}/${p.staffId1}`,
     ]),
   );
   const { isUnavailable } = buildUnavailableIndex(unavailableConditions);
@@ -149,16 +167,17 @@ export function validateCells(
       });
     for (const other of staff) {
       if (other.id <= person.id) continue;
-      if (!np.has(`${person.id}/${other.id}`)) continue;
       for (const date of dates) {
         const a = byKey.get(`${person.id}/${date}`);
         const b = byKey.get(`${other.id}/${date}`);
-        if (
-          a?.shiftTypeId != null &&
-          b?.shiftTypeId != null &&
-          byTypeId.get(a.shiftTypeId)?.countsAsWork &&
-          byTypeId.get(b.shiftTypeId)?.countsAsWork
-        )
+        if (isNgPairConflict(
+          person.id,
+          a?.shiftTypeId,
+          other.id,
+          b?.shiftTypeId,
+          ngPairs,
+          (shiftTypeId) => Boolean(byTypeId.get(shiftTypeId)?.countsAsWork),
+        ))
           violations.push({
             type: "NG_PAIR",
             targetDate: date,
@@ -199,12 +218,6 @@ export function generate(
   const byKey = new Map(cells.map((c) => [`${c.staffId}/${c.targetDate}`, c]));
   const dates = [...new Set(cells.map((c) => c.targetDate))].sort();
   const workDays = new Map(staff.map((s) => [s.id, 0]));
-  const np = new Set(
-    ngPairs.flatMap((p) => [
-      `${p.staffId1}/${p.staffId2}`,
-      `${p.staffId2}/${p.staffId1}`,
-    ]),
-  );
   const { isUnavailable } = buildUnavailableIndex(unavailableConditions);
 
   for (const c of cells) c.shiftTypeId = c.isRequestHoliday ? holiday : null;
@@ -237,7 +250,19 @@ export function generate(
                   byTypeId.get(x!.shiftTypeId!)?.countsAsWork
                 );
               });
-              if (assigned.some((o) => np.has(`${s.id}/${o.id}`))) return false;
+              if (
+                assigned.some((o) => {
+                  const otherType = byKey.get(`${o.id}/${date}`)?.shiftTypeId;
+                  return isNgPairConflict(
+                    s.id,
+                    type.id,
+                    o.id,
+                    otherType,
+                    ngPairs,
+                    (shiftTypeId) => Boolean(byTypeId.get(shiftTypeId)?.countsAsWork),
+                  );
+                })
+              ) return false;
               const prev = di
                 ? byKey.get(`${s.id}/${dates[di - 1]}`)?.shiftTypeId
                 : null;

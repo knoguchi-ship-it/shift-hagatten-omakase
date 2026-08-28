@@ -290,6 +290,7 @@ describe("ShiftDatabase configuration saving", () => {
         ngPairs: [{ staffId1: 1, staffId2: 2 }],
         sequenceRules: [],
         unavailableConditions: [],
+        weeklyRoleRequirements: [],
       }),
     ).toThrow("職員が見つからないか、削除済みです");
 
@@ -312,6 +313,7 @@ describe("ShiftDatabase configuration saving", () => {
       ngPairs: [{ staffId1: -1, staffId2: -2 }],
       sequenceRules: [{ firstShiftTypeId: existingType.id, secondShiftTypeId: -3 }],
       unavailableConditions: [{ staffId: -1, conditionType: "SHIFT_TYPE", value: -3 }],
+      weeklyRoleRequirements: [],
     });
 
     const a = updated.staff.find((staff) => staff.name === "Aさん")!;
@@ -320,5 +322,40 @@ describe("ShiftDatabase configuration saving", () => {
     expect(updated.ngPairs).toContainEqual({ staffId1: Math.min(a.id, b.id), staffId2: Math.max(a.id, b.id) });
     expect(updated.sequenceRules).toContainEqual({ firstShiftTypeId: existingType.id, secondShiftTypeId: training.id });
     expect(updated.unavailableConditions).toContainEqual({ staffId: a.id, conditionType: "SHIFT_TYPE", value: training.id });
+  });
+});
+
+describe("ShiftDatabase scheduling defaults and deletion", () => {
+  it("copies weekday staffing defaults only when a new month is created", () => {
+    const db = open(path.join(dir, "weekly-defaults.sqlite"));
+    const role = db.saveRole({ name: "介護士" })[0];
+    const dayShift = db.shiftTypes()[0];
+    db.saveConfiguration({
+      staff: [],
+      shiftTypes: db.shiftTypes(),
+      ngPairs: [],
+      sequenceRules: [],
+      unavailableConditions: [],
+      weeklyRoleRequirements: [{ weekday: 4, shiftTypeId: dayShift.id, roleId: role.id, requiredCount: 3 }],
+    });
+
+    const created = db.createMonth("2026-10");
+    expect(created.roleRequirements).toContainEqual({
+      targetDate: "2026-10-01",
+      shiftTypeId: dayShift.id,
+      roleId: role.id,
+      requiredCount: 3,
+    });
+    expect(created.roleRequirements.some((item) => item.targetDate === "2026-10-02")).toBe(false);
+  });
+
+  it("backs up and deletes all data belonging to the selected month", async () => {
+    const file = path.join(dir, "delete-month.sqlite");
+    const db = open(file);
+    db.createMonth("2026-10");
+
+    await expect(db.deleteMonth("2026-10")).resolves.toEqual({ status: "success" });
+    expect(db.months()).toEqual([]);
+    expect(fs.readdirSync(path.join(dir, "backups")).some((name) => name.includes("before-delete-2026-10"))).toBe(true);
   });
 });

@@ -14,6 +14,7 @@ import type {
   ShiftType,
   Staff,
   UnavailableCondition,
+  WeeklyRoleRequirement,
 } from "../shared/types";
 import { validateCells as validateCellsPure } from "./generation/engine";
 
@@ -32,7 +33,8 @@ const REQUIRED_TABLES = [
 ];
 const MAX_RESTORE_BYTES = 500 * 1024 * 1024;
 const LEGACY_SCHEMA_VERSION = 2;
-const LATEST_SCHEMA_VERSION = 3;
+const MONTHLY_CONSTRAINTS_SCHEMA_VERSION = 3;
+const LATEST_SCHEMA_VERSION = 4;
 
 export class ShiftDatabase {
   private db: Database.Database;
@@ -64,7 +66,8 @@ export class ShiftDatabase {
       this.setSchemaVersion(LATEST_SCHEMA_VERSION);
     } else {
       if (version < LEGACY_SCHEMA_VERSION) this.migrateLegacySchema();
-      if (version < LATEST_SCHEMA_VERSION) this.migrateMonthlyConstraintsSchema();
+      if (version < MONTHLY_CONSTRAINTS_SCHEMA_VERSION) this.migrateMonthlyConstraintsSchema();
+      if (version < LATEST_SCHEMA_VERSION) this.migrateScopedPairsAndWeeklyRequirements();
     }
     this.db.pragma("foreign_keys = ON");
     const violations = this.db.pragma("foreign_key_check") as { table: string; rowid: number }[];
@@ -127,7 +130,8 @@ export class ShiftDatabase {
       CREATE TABLE IF NOT EXISTS ng_pairs (
         staff_id_1 INTEGER NOT NULL REFERENCES staff(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
         staff_id_2 INTEGER NOT NULL REFERENCES staff(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-        PRIMARY KEY(staff_id_1, staff_id_2),
+        shift_type_id INTEGER NOT NULL DEFAULT 0 CHECK(shift_type_id >= 0),
+        PRIMARY KEY(staff_id_1, staff_id_2, shift_type_id),
         CHECK(staff_id_1 < staff_id_2)
       );
       CREATE TABLE IF NOT EXISTS shift_sequence_rules (
@@ -153,7 +157,8 @@ export class ShiftDatabase {
         month TEXT NOT NULL,
         staff_id_1 INTEGER NOT NULL REFERENCES staff(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
         staff_id_2 INTEGER NOT NULL REFERENCES staff(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-        PRIMARY KEY(month, staff_id_1, staff_id_2),
+        shift_type_id INTEGER NOT NULL DEFAULT 0 CHECK(shift_type_id >= 0),
+        PRIMARY KEY(month, staff_id_1, staff_id_2, shift_type_id),
         CHECK(staff_id_1 < staff_id_2)
       );
       CREATE TABLE IF NOT EXISTS monthly_shift_sequence_rules (
@@ -169,6 +174,13 @@ export class ShiftDatabase {
         value INTEGER NOT NULL,
         PRIMARY KEY(month, staff_id, condition_type, value),
         CHECK((condition_type = 'WEEKDAY' AND value BETWEEN 0 AND 6) OR condition_type = 'SHIFT_TYPE')
+      );
+      CREATE TABLE IF NOT EXISTS weekly_role_requirements (
+        weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+        shift_type_id INTEGER NOT NULL REFERENCES shift_types(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+        role_id INTEGER NOT NULL REFERENCES roles(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+        required_count INTEGER NOT NULL DEFAULT 0 CHECK(required_count >= 0),
+        PRIMARY KEY(weekday, shift_type_id, role_id)
       );
     `);
   }
@@ -285,6 +297,42 @@ export class ShiftDatabase {
           CHECK((condition_type = 'WEEKDAY' AND value BETWEEN 0 AND 6) OR condition_type = 'SHIFT_TYPE')
         );
       `);
+      this.setSchemaVersion(MONTHLY_CONSTRAINTS_SCHEMA_VERSION);
+    });
+    tx();
+  }
+  private migrateScopedPairsAndWeeklyRequirements() {
+    const tx = this.db.transaction(() => {
+      this.db.exec(`
+        CREATE TABLE ng_pairs_new (
+          staff_id_1 INTEGER NOT NULL REFERENCES staff(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+          staff_id_2 INTEGER NOT NULL REFERENCES staff(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+          shift_type_id INTEGER NOT NULL DEFAULT 0 CHECK(shift_type_id >= 0),
+          PRIMARY KEY(staff_id_1, staff_id_2, shift_type_id), CHECK(staff_id_1 < staff_id_2)
+        );
+        INSERT INTO ng_pairs_new(staff_id_1,staff_id_2,shift_type_id)
+          SELECT staff_id_1,staff_id_2,0 FROM ng_pairs;
+        DROP TABLE ng_pairs;
+        ALTER TABLE ng_pairs_new RENAME TO ng_pairs;
+        CREATE TABLE monthly_ng_pairs_new (
+          month TEXT NOT NULL,
+          staff_id_1 INTEGER NOT NULL REFERENCES staff(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+          staff_id_2 INTEGER NOT NULL REFERENCES staff(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+          shift_type_id INTEGER NOT NULL DEFAULT 0 CHECK(shift_type_id >= 0),
+          PRIMARY KEY(month, staff_id_1, staff_id_2, shift_type_id), CHECK(staff_id_1 < staff_id_2)
+        );
+        INSERT INTO monthly_ng_pairs_new(month,staff_id_1,staff_id_2,shift_type_id)
+          SELECT month,staff_id_1,staff_id_2,0 FROM monthly_ng_pairs;
+        DROP TABLE monthly_ng_pairs;
+        ALTER TABLE monthly_ng_pairs_new RENAME TO monthly_ng_pairs;
+        CREATE TABLE weekly_role_requirements (
+          weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+          shift_type_id INTEGER NOT NULL REFERENCES shift_types(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+          role_id INTEGER NOT NULL REFERENCES roles(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+          required_count INTEGER NOT NULL DEFAULT 0 CHECK(required_count >= 0),
+          PRIMARY KEY(weekday, shift_type_id, role_id)
+        );
+      `);
       this.setSchemaVersion(LATEST_SCHEMA_VERSION);
     });
     tx();
@@ -321,6 +369,7 @@ export class ShiftDatabase {
       sequenceRules: this.sequenceRules(),
       roles: this.roles(),
       unavailableConditions: this.unavailableConditions(),
+      weeklyRoleRequirements: this.weeklyRoleRequirements(),
     };
   }
   staff(): Staff[] {
@@ -510,6 +559,7 @@ export class ShiftDatabase {
     ngPairs: NgPair[];
     sequenceRules: SequenceRule[];
     unavailableConditions: UnavailableCondition[];
+    weeklyRoleRequirements: WeeklyRoleRequirement[];
   }) {
     const tx = this.db.transaction(() => {
       const addStaff = this.db.prepare(
@@ -570,6 +620,7 @@ export class ShiftDatabase {
       );
       const persistedStaffId = (id: number) => staffIds.get(id) ?? id;
       const persistedShiftTypeId = (id: number) => shiftTypeIds.get(id) ?? id;
+      const activeRole = this.db.prepare("SELECT 1 FROM roles WHERE id=? AND deleted_at IS NULL");
       const assertStaff = (id: number) => {
         if (!activeStaff.get(id)) throw new Error("職員が見つからないか、削除済みです");
       };
@@ -579,14 +630,16 @@ export class ShiftDatabase {
 
       this.db.exec("DELETE FROM ng_pairs; DELETE FROM shift_sequence_rules; DELETE FROM staff_unavailable_conditions;");
       const pair = this.db.prepare(
-        "INSERT INTO ng_pairs(staff_id_1,staff_id_2) VALUES(?,?)",
+        "INSERT INTO ng_pairs(staff_id_1,staff_id_2,shift_type_id) VALUES(?,?,?)",
       );
       payload.ngPairs.forEach((item) => {
         const first = persistedStaffId(item.staffId1);
         const second = persistedStaffId(item.staffId2);
         assertStaff(first);
         assertStaff(second);
-        pair.run(Math.min(first, second), Math.max(first, second));
+        const scope = item.shiftTypeId == null ? 0 : persistedShiftTypeId(item.shiftTypeId);
+        if (scope) assertShiftType(scope);
+        pair.run(Math.min(first, second), Math.max(first, second), scope);
       });
       const sequence = this.db.prepare(
         "INSERT INTO shift_sequence_rules(first_shift_type_id,second_shift_type_id) VALUES(?,?)",
@@ -610,16 +663,29 @@ export class ShiftDatabase {
         if (item.conditionType === "SHIFT_TYPE") assertShiftType(value);
         unavailable.run(staffId, item.conditionType, value);
       });
+      this.db.prepare("DELETE FROM weekly_role_requirements").run();
+      const weeklyRequirement = this.db.prepare(
+        "INSERT INTO weekly_role_requirements(weekday,shift_type_id,role_id,required_count) VALUES(?,?,?,?)",
+      );
+      payload.weeklyRoleRequirements.forEach((item) => {
+        const shiftTypeId = persistedShiftTypeId(item.shiftTypeId);
+        if (item.weekday < 0 || item.weekday > 6) throw new Error("曜日は日曜日から土曜日の範囲で指定してください");
+        if (item.requiredCount < 0) throw new Error("必要人数は0人以上で指定してください");
+        if (!activeRole.get(item.roleId)) throw new Error("削除済みの職種は既定値に設定できません");
+        assertShiftType(shiftTypeId);
+        weeklyRequirement.run(item.weekday, shiftTypeId, item.roleId, item.requiredCount);
+      });
     });
     tx();
     return this.bootstrap();
   }
   ngPairs(): NgPair[] {
-    return this.db
+    const rows = this.db
       .prepare(
-        "SELECT staff_id_1 AS staffId1, staff_id_2 AS staffId2 FROM ng_pairs",
+        "SELECT staff_id_1 AS staffId1, staff_id_2 AS staffId2, NULLIF(shift_type_id,0) AS shiftTypeId FROM ng_pairs",
       )
       .all() as NgPair[];
+    return rows.map(({ shiftTypeId, ...pair }) => shiftTypeId == null ? pair : { ...pair, shiftTypeId });
   }
   sequenceRules(): SequenceRule[] {
     return this.db
@@ -635,13 +701,20 @@ export class ShiftDatabase {
       )
       .all() as UnavailableCondition[];
   }
+  weeklyRoleRequirements(): WeeklyRoleRequirement[] {
+    return this.db
+      .prepare(
+        "SELECT weekday,shift_type_id AS shiftTypeId,role_id AS roleId,required_count AS requiredCount FROM weekly_role_requirements ORDER BY weekday,shift_type_id,role_id",
+      )
+      .all() as WeeklyRoleRequirement[];
+  }
   monthlyConstraints(month: string): MonthlyConstraints {
     return {
-      ngPairs: this.db
+      ngPairs: (this.db
         .prepare(
-          "SELECT staff_id_1 AS staffId1, staff_id_2 AS staffId2 FROM monthly_ng_pairs WHERE month=?",
+          "SELECT staff_id_1 AS staffId1, staff_id_2 AS staffId2, NULLIF(shift_type_id,0) AS shiftTypeId FROM monthly_ng_pairs WHERE month=?",
         )
-        .all(month) as NgPair[],
+        .all(month) as NgPair[]).map(({ shiftTypeId, ...pair }) => shiftTypeId == null ? pair : { ...pair, shiftTypeId }),
       sequenceRules: this.db
         .prepare(
           "SELECT first_shift_type_id AS firstShiftTypeId, second_shift_type_id AS secondShiftTypeId FROM monthly_shift_sequence_rules WHERE month=?",
@@ -673,14 +746,14 @@ export class ShiftDatabase {
     const tx = this.db.transaction(() => {
       this.db.exec("DELETE FROM ng_pairs; DELETE FROM shift_sequence_rules;");
       const np = this.db.prepare(
-        "INSERT OR IGNORE INTO ng_pairs(staff_id_1,staff_id_2) VALUES(?,?)",
+        "INSERT OR IGNORE INTO ng_pairs(staff_id_1,staff_id_2,shift_type_id) VALUES(?,?,?)",
       );
       payload.ngPairs
         .filter((p) => p.staffId1 !== p.staffId2)
         .forEach((p) =>
           np.run(
             Math.min(p.staffId1, p.staffId2),
-            Math.max(p.staffId1, p.staffId2),
+            Math.max(p.staffId1, p.staffId2), p.shiftTypeId ?? 0,
           ),
         );
       const sr = this.db.prepare(
@@ -706,13 +779,35 @@ export class ShiftDatabase {
     const q = this.db.prepare(
       "INSERT OR IGNORE INTO shifts(target_date,staff_id) VALUES (?,?)",
     );
+    const defaults = this.db.prepare(
+      "INSERT OR IGNORE INTO role_requirements(target_date,shift_type_id,role_id,required_count) SELECT ?,shift_type_id,role_id,required_count FROM weekly_role_requirements WHERE weekday=?",
+    );
     const tx = this.db.transaction(() => {
-      for (let d = 1; d <= days; d++)
+      for (let d = 1; d <= days; d++) {
+        const targetDate = `${month}-${String(d).padStart(2, "0")}`;
+        defaults.run(targetDate, new Date(`${targetDate}T00:00:00`).getDay());
         for (const s of staff)
-          q.run(`${month}-${String(d).padStart(2, "0")}`, s.id);
+          q.run(targetDate, s.id);
+      }
     });
     tx();
     return this.getMonth(month);
+  }
+  async deleteMonth(month: string) {
+    const backupDirectory = path.join(path.dirname(this.file), "backups");
+    fs.mkdirSync(backupDirectory, { recursive: true });
+    const backupName = `before-delete-${month}-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`;
+    await this.db.backup(path.join(backupDirectory, backupName));
+    const tx = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM monthly_ng_pairs WHERE month=?").run(month);
+      this.db.prepare("DELETE FROM monthly_shift_sequence_rules WHERE month=?").run(month);
+      this.db.prepare("DELETE FROM monthly_staff_unavailable_conditions WHERE month=?").run(month);
+      this.db.prepare("DELETE FROM role_requirements WHERE target_date LIKE ?").run(`${month}%`);
+      this.db.prepare("DELETE FROM daily_requirements WHERE target_date LIKE ?").run(`${month}%`);
+      this.db.prepare("DELETE FROM shifts WHERE target_date LIKE ?").run(`${month}%`);
+    });
+    tx();
+    return { status: "success" };
   }
   getMonth(month: string): MonthData {
     return {
@@ -819,7 +914,7 @@ export class ShiftDatabase {
         const month = payload.changes[0]?.targetDate.slice(0, 7) ?? payload.roleRequirements[0]?.targetDate.slice(0, 7);
         if (!month) throw new Error("月限定制約の対象月を特定できません");
         const activeStaff = this.db.prepare("SELECT 1 FROM staff WHERE id=? AND deleted_at IS NULL");
-        const insertPair = this.db.prepare("INSERT INTO monthly_ng_pairs(month,staff_id_1,staff_id_2) VALUES(?,?,?)");
+        const insertPair = this.db.prepare("INSERT INTO monthly_ng_pairs(month,staff_id_1,staff_id_2,shift_type_id) VALUES(?,?,?,?)");
         const insertSequence = this.db.prepare("INSERT INTO monthly_shift_sequence_rules(month,first_shift_type_id,second_shift_type_id) VALUES(?,?,?)");
         const insertUnavailable = this.db.prepare("INSERT INTO monthly_staff_unavailable_conditions(month,staff_id,condition_type,value) VALUES(?,?,?,?)");
         this.db.prepare("DELETE FROM monthly_ng_pairs WHERE month=?").run(month);
@@ -827,7 +922,8 @@ export class ShiftDatabase {
         this.db.prepare("DELETE FROM monthly_staff_unavailable_conditions WHERE month=?").run(month);
         for (const pair of payload.monthlyConstraints.ngPairs) {
           if (!activeStaff.get(pair.staffId1) || !activeStaff.get(pair.staffId2)) throw new Error("月限定NGペアの職員が見つかりません");
-          insertPair.run(month, Math.min(pair.staffId1, pair.staffId2), Math.max(pair.staffId1, pair.staffId2));
+          if (pair.shiftTypeId != null && !activeShiftType.get(pair.shiftTypeId)) throw new Error("月限定NGペアの勤務種別が見つかりません");
+          insertPair.run(month, Math.min(pair.staffId1, pair.staffId2), Math.max(pair.staffId1, pair.staffId2), pair.shiftTypeId ?? 0);
         }
         for (const rule of payload.monthlyConstraints.sequenceRules) {
           if (!activeShiftType.get(rule.firstShiftTypeId) || !activeShiftType.get(rule.secondShiftTypeId)) throw new Error("月限定翌日ルールの勤務種別が見つかりません");

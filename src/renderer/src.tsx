@@ -14,6 +14,7 @@ import type {
   ShiftType,
   Staff,
   UnavailableCondition,
+  WeeklyRoleRequirement,
   Violation,
 } from "../shared/types";
 import { WEEKDAY_LABELS, daysInMonth } from "../shared/types";
@@ -57,6 +58,7 @@ declare global {
       ) => () => void;
       onGenerateError: (cb: (p: { jobId: number; message: string }) => void) => () => void;
       createMonth: (m: string) => Promise<MonthData>;
+      deleteMonth: (m: string) => Promise<{ status: string }>;
       getMonth: (m: string) => Promise<MonthData>;
       setUnsavedChanges: (hasUnsavedChanges: boolean) => Promise<void>;
       updateCells: (p: unknown) => Promise<unknown>;
@@ -119,6 +121,24 @@ function App() {
     setMonthDirty(false);
     setBoot(next);
     setPage("edit");
+  };
+  const deleteExistingMonth = async (targetMonth: string) => {
+    if (!confirm(`「${targetMonth}」の勤務表、月別条件、必要人数を削除します。削除前のバックアップを作成します。削除しますか？`)) return;
+    try {
+      await window.shiftApi.deleteMonth(targetMonth);
+      const next = await window.shiftApi.bootstrap();
+      setBoot(next);
+      if (activeMonth === targetMonth) {
+        setData(undefined);
+        setSavedData(undefined);
+        setActiveMonth(undefined);
+        setMonthDirty(false);
+        setPage("home");
+      }
+      setNotice(`${targetMonth}の勤務表を削除しました。削除前のバックアップを保存しています。`);
+    } catch {
+      setNotice("勤務表を削除できませんでした。データは変更されていません。");
+    }
   };
   const discardMonthChanges = () => {
     if (savedData) setData(savedData);
@@ -201,6 +221,7 @@ function App() {
             setMonth={setMonth}
             create={create}
             open={openExistingMonth}
+            remove={deleteExistingMonth}
             months={boot.months}
           />
         )}{" "}
@@ -247,12 +268,14 @@ function Home({
   setMonth,
   create,
   open,
+  remove,
   months,
 }: {
   month: string;
   setMonth: (v: string) => void;
   create: (nextPage?: "conditions" | "edit") => void;
   open: (month: string) => Promise<void>;
+  remove: (month: string) => Promise<void>;
   months: { month: string }[];
 }) {
   return (
@@ -286,7 +309,10 @@ function Home({
               {months.map((x) => (
                 <li key={x.month}>
                   <strong>{x.month.replace("-", "年")}月</strong>
-                  <button onClick={() => void open(x.month)}>開く</button>
+                  <span className="month-actions">
+                    <button onClick={() => void open(x.month)}>開く</button>
+                    <button className="danger-button" onClick={() => void remove(x.month)}>削除</button>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -514,8 +540,8 @@ function MonthlyConstraintsPanel({
   return (
     <section className="condition-card monthly-constraints" aria-labelledby="monthly-constraints-heading">
       <div className="section-heading"><div><p className="step-badge">条件 3</p><h3 id="monthly-constraints-heading">この月だけの追加制約</h3><p>共通の制約とは別に、この月に限って追加するルールです。ここで追加した内容は他の月には反映されません。</p></div></div>
-      <fieldset><legend>この月だけのNGペア</legend><p>同じ日に勤務させない職員の組み合わせです。</p>
-        {monthly.ngPairs.map((pair, index) => <div className="rule-row" key={`${pair.staffId1}-${pair.staffId2}-${index}`}><label>職員A<select value={pair.staffId1} onChange={(e) => update({ ngPairs: monthly.ngPairs.map((item, i) => i === index ? { ...item, staffId1: Number(e.target.value) } : item) })}>{data.staff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></label><label>職員B<select value={pair.staffId2} onChange={(e) => update({ ngPairs: monthly.ngPairs.map((item, i) => i === index ? { ...item, staffId2: Number(e.target.value) } : item) })}>{data.staff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></label><button onClick={() => update({ ngPairs: monthly.ngPairs.filter((_, i) => i !== index) })}>{staffName(pair.staffId1)} と {staffName(pair.staffId2)} の設定を削除</button></div>)}
+      <fieldset><legend>この月だけのNGペア</legend><p>勤務種別を未指定にすると、二人は同じ日にどの勤務にも入れません。指定時は、その勤務種別に二人を同時に割り当てません。</p>
+        {monthly.ngPairs.map((pair, index) => <div className="rule-row" key={`${pair.staffId1}-${pair.staffId2}-${index}`}><label>職員A<select value={pair.staffId1} onChange={(e) => update({ ngPairs: monthly.ngPairs.map((item, i) => i === index ? { ...item, staffId1: Number(e.target.value) } : item) })}>{data.staff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></label><label>職員B<select value={pair.staffId2} onChange={(e) => update({ ngPairs: monthly.ngPairs.map((item, i) => i === index ? { ...item, staffId2: Number(e.target.value) } : item) })}>{data.staff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></label><label>対象勤務種別（任意）<select value={pair.shiftTypeId ?? ""} onChange={(e) => update({ ngPairs: monthly.ngPairs.map((item, i) => i === index ? { ...item, shiftTypeId: e.target.value ? Number(e.target.value) : null } : item) })}><option value="">種別を問わず同日に勤務不可</option>{data.shiftTypes.filter((type) => !type.deletedAt).map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label><button onClick={() => update({ ngPairs: monthly.ngPairs.filter((_, i) => i !== index) })}>{staffName(pair.staffId1)} と {staffName(pair.staffId2)} の設定を削除</button></div>)}
         <button disabled={data.staff.length < 2} onClick={() => update({ ngPairs: [...monthly.ngPairs, { staffId1: data.staff[0].id, staffId2: data.staff[1].id }] })}>この月のNGペアを追加</button>
       </fieldset>
       <fieldset><legend>この月だけの翌日ルール</legend><p>例：研修の翌日は日勤にしない、など、この月だけの勤務種別の連続条件です。</p>
@@ -1053,8 +1079,14 @@ function RolesPanel({
         </form>
         <p id="role-add-help" className="field-help">例：介護職、看護職。追加後、職員の「主職種」と必要人数の設定で選べます。</p>
         {message && <p className="inline-message" role="status">{message}</p>}
-        {roles.map((role) => (
-          <div className="form-row" key={role.id}>
+        <div className="master-table-wrap"><table className="master-table role-table"><thead><tr>
+          <th>職種名<br /><small>職員の主職種・必要人数で選びます</small></th>
+          <th>表示順<br /><small>小さい番号ほど先に表示</small></th>
+          <th>利用状況<br /><small>所属職員数</small></th>
+          <th><span className="sr-only">操作</span></th>
+        </tr></thead><tbody>{roles.map((role) => (
+          <tr key={role.id}>
+            <td>
             <input
               defaultValue={role.name}
               aria-label={`${role.name}の職種名`}
@@ -1064,7 +1096,7 @@ function RolesPanel({
                 await onChanged();
               }}
             />
-            <input
+            </td><td><input
               type="number"
               min="0"
               defaultValue={role.displayOrder}
@@ -1079,11 +1111,11 @@ function RolesPanel({
                 await onChanged();
               }}
             />
-            <span>
+            </td><td><span>
               {role.deletedAt ? "削除済み" : "有効"}（
               {staff.filter((s) => s.roleId === role.id).length}名）
             </span>
-            <button
+            </td><td><button
               onClick={async () => {
                 if (role.deletedAt) {
                   await window.shiftApi.setRoleDeleted(role.id, false);
@@ -1093,9 +1125,9 @@ function RolesPanel({
               }}
             >
               {role.deletedAt ? "復元" : "削除"}
-            </button>
-          </div>
-        ))}
+            </button></td>
+          </tr>
+        ))}</tbody></table></div>
       </div>
     </div>
   );
@@ -1724,6 +1756,49 @@ function LegacySettings({
 
 type MasterSection = "roles" | "staff" | "types" | "rules";
 
+function WeeklyRequirementsPanel({
+  roles,
+  shiftTypes,
+  values,
+  setValues,
+}: {
+  roles: Role[];
+  shiftTypes: ShiftType[];
+  values: WeeklyRoleRequirement[];
+  setValues: (values: WeeklyRoleRequirement[]) => void;
+}) {
+  const workTypes = shiftTypes.filter((type) => type.countsAsWork && !type.deletedAt);
+  const [shiftTypeId, setShiftTypeId] = useState<number | undefined>(workTypes[0]?.id);
+  const update = (weekday: number, roleId: number, raw: string) => {
+    if (!shiftTypeId) return;
+    const requiredCount = Math.max(0, Number(raw) || 0);
+    setValues([
+      ...values.filter((value) => !(value.weekday === weekday && value.roleId === roleId && value.shiftTypeId === shiftTypeId)),
+      { weekday, roleId, shiftTypeId, requiredCount },
+    ]);
+  };
+  const valueFor = (weekday: number, roleId: number) =>
+    values.find((value) => value.weekday === weekday && value.roleId === roleId && value.shiftTypeId === shiftTypeId)?.requiredCount ?? 0;
+  return (
+    <section className="master-panel weekly-requirements" aria-labelledby="weekly-default-heading">
+      <div className="panel-heading"><div>
+        <h3 id="weekly-default-heading">曜日別の必要人数（新規月の既定値）</h3>
+        <p>新しい月を作成したときにだけ、曜日ごとの人数を各日へコピーします。作成済みの勤務表は変更しません。</p>
+      </div></div>
+      {workTypes.length && roles.length ? <>
+        <label className="field-label">勤務種別
+          <select value={shiftTypeId ?? ""} onChange={(event) => setShiftTypeId(Number(event.target.value))}>
+            {workTypes.map((type) => <option key={type.id} value={type.id}>{type.name}（{type.shortName}）</option>)}
+          </select>
+        </label>
+        <div className="master-table-wrap"><table className="master-table weekly-requirement-table"><thead><tr><th>職種</th>{WEEKDAY_LABELS.map((label) => <th key={label}>{label}<br /><small>必要人数</small></th>)}</tr></thead><tbody>
+          {roles.filter((role) => !role.deletedAt).map((role) => <tr key={role.id}><th scope="row">{role.name}</th>{WEEKDAY_LABELS.map((label, weekday) => <td key={label}><label><span className="sr-only">{role.name}・{label}曜日の必要人数</span><input className="count" type="number" min="0" value={valueFor(weekday, role.id)} onChange={(event) => update(weekday, role.id, event.target.value)} /></label></td>)}</tr>)}
+        </tbody></table></div>
+      </> : <p className="empty-state">職種と「勤務日として数える」勤務種別を登録すると、曜日別の既定値を設定できます。</p>}
+    </section>
+  );
+}
+
 function Settings({
   boot,
   onSaved,
@@ -1743,16 +1818,17 @@ function Settings({
   const [ngPairs, setNgPairs] = useState(boot.ngPairs);
   const [sequenceRules, setSequenceRules] = useState(boot.sequenceRules);
   const [unavailableConditions, setUnavailableConditions] = useState(boot.unavailableConditions);
+  const [weeklyRoleRequirements, setWeeklyRoleRequirements] = useState(boot.weeklyRoleRequirements);
   const [roles, setRoles] = useState<Role[]>([]);
   const initialSettings = useRef("");
-  const settingState = () => JSON.stringify({ staff, types, ngPairs, sequenceRules, unavailableConditions });
+  const settingState = () => JSON.stringify({ staff, types, ngPairs, sequenceRules, unavailableConditions, weeklyRoleRequirements });
   if (!initialSettings.current) initialSettings.current = settingState();
   useEffect(() => {
     window.shiftApi.listRoles().then(setRoles);
   }, [boot]);
   useEffect(() => {
     onDirty(settingState() !== initialSettings.current);
-  }, [staff, types, ngPairs, sequenceRules, unavailableConditions, onDirty]);
+  }, [staff, types, ngPairs, sequenceRules, unavailableConditions, weeklyRoleRequirements, onDirty]);
   const updateStaff = (index: number, change: Partial<Staff>) =>
     setStaff(staff.map((item, i) => (i === index ? { ...item, ...change } : item)));
   const updateType = (index: number, change: Partial<ShiftType>) =>
@@ -1765,6 +1841,7 @@ function Settings({
         ngPairs,
         sequenceRules,
         unavailableConditions,
+        weeklyRoleRequirements,
       });
       initialSettings.current = settingState();
       onDirty(false);
@@ -1824,14 +1901,14 @@ function Settings({
             <>
               <section className="master-panel" aria-labelledby="shift-type-master-heading">
                 <div className="panel-heading"><div><h3 id="shift-type-master-heading">勤務種別マスタ</h3><p>表に表示する略称と、勤務時間・勤務日として数えるかを設定します。</p></div><button onClick={() => setTypes([...types, { id: -Date.now() - types.length, name: "", shortName: "", colorCode: "#ffffff", startTime: null, endTime: null, countsAsWork: 1 }])}>勤務種別を追加</button></div>
-                <div className="master-table-wrap"><table className="master-table shift-type-table"><thead><tr><th>名称</th><th>略称</th><th>色</th><th>開始</th><th>終了</th><th>勤務日として数える</th></tr></thead><tbody>
+                <div className="master-table-wrap"><table className="master-table shift-type-table"><colgroup><col className="shift-type-name-col" /><col className="shift-type-short-col" /><col className="shift-type-color-col" /><col className="shift-type-time-col" /><col className="shift-type-time-col" /><col className="shift-type-work-col" /></colgroup><thead><tr><th>名称</th><th>略称</th><th>色</th><th>開始</th><th>終了</th><th>勤務日として数える</th></tr></thead><tbody>
                   {types.map((item, index) => <tr key={item.id}>
                     <td><label><span className="sr-only">勤務種別名称</span><input value={item.name} placeholder="例：日勤" onChange={(e) => updateType(index, { name: e.target.value })} /></label></td>
                     <td><label><span className="sr-only">表の略称</span><input value={item.shortName} placeholder="例：日" maxLength={20} onChange={(e) => updateType(index, { shortName: e.target.value })} /></label></td>
                     <td><label className="color-field"><span className="sr-only">表示色</span><input type="color" value={item.colorCode} onChange={(e) => updateType(index, { colorCode: e.target.value })} /><span>{item.colorCode}</span></label></td>
                     <td><label><span className="sr-only">開始時刻</span><input type="time" value={item.startTime ?? ""} onChange={(e) => updateType(index, { startTime: e.target.value || null })} /></label></td>
                     <td><label><span className="sr-only">終了時刻</span><input type="time" value={item.endTime ?? ""} onChange={(e) => updateType(index, { endTime: e.target.value || null })} /></label></td>
-                    <td><label className="checkbox-label"><input type="checkbox" checked={Boolean(item.countsAsWork)} onChange={(e) => updateType(index, { countsAsWork: e.target.checked ? 1 : 0 })} />勤務日として集計</label></td>
+                    <td className="checkbox-cell"><label><span className="sr-only">{item.name || "新しい勤務種別"}を勤務日として数える</span><input type="checkbox" aria-label={`${item.name || "新しい勤務種別"}を勤務日として数える`} checked={Boolean(item.countsAsWork)} onChange={(e) => updateType(index, { countsAsWork: e.target.checked ? 1 : 0 })} /></label></td>
                   </tr>)}
                 </tbody></table></div>
               </section>
@@ -1840,8 +1917,9 @@ function Settings({
           )}
           {section === "rules" && <section className="master-panel rules-panel" aria-labelledby="rules-heading">
             <div className="panel-heading"><div><h3 id="rules-heading">勤務の制約</h3><p>自動生成で守るべき組み合わせと、職員ごとの勤務不可条件を設定します。</p></div></div>
-            <fieldset><legend>同じ日に勤務できない組み合わせ（NGペア）</legend><p>同日に入れてはいけない職員の組み合わせを登録します。</p>{ngPairs.map((pair, index) => <div className="rule-row" key={`${pair.staffId1}-${pair.staffId2}-${index}`}><label>職員A<select value={pair.staffId1} onChange={(e) => setNgPairs(ngPairs.map((x, i) => i === index ? { ...x, staffId1: selectStaff(e.target.value) } : x))}>{staff.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の職員"}</option>)}</select></label><label>職員B<select value={pair.staffId2} onChange={(e) => setNgPairs(ngPairs.map((x, i) => i === index ? { ...x, staffId2: selectStaff(e.target.value) } : x))}>{staff.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の職員"}</option>)}</select></label><button onClick={() => setNgPairs(ngPairs.filter((_, i) => i !== index))}>この組み合わせを削除</button></div>)}<button disabled={staff.length < 2} onClick={() => setNgPairs([...ngPairs, { staffId1: staff[0].id, staffId2: staff[1].id }])}>NGペアを追加</button></fieldset>
+            <fieldset><legend>同じ日に勤務できない組み合わせ（NGペア）</legend><p>勤務種別を未指定にすると同日にどの勤務にも入れません。指定時は、その勤務種別に二人を同時に割り当てません。</p>{ngPairs.map((pair, index) => <div className="rule-row" key={`${pair.staffId1}-${pair.staffId2}-${index}`}><label>職員A<select value={pair.staffId1} onChange={(e) => setNgPairs(ngPairs.map((x, i) => i === index ? { ...x, staffId1: selectStaff(e.target.value) } : x))}>{staff.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の職員"}</option>)}</select></label><label>職員B<select value={pair.staffId2} onChange={(e) => setNgPairs(ngPairs.map((x, i) => i === index ? { ...x, staffId2: selectStaff(e.target.value) } : x))}>{staff.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の職員"}</option>)}</select></label><label>対象勤務種別（任意）<select value={pair.shiftTypeId ?? ""} onChange={(e) => setNgPairs(ngPairs.map((x, i) => i === index ? { ...x, shiftTypeId: e.target.value ? Number(e.target.value) : null } : x))}><option value="">種別を問わず同日に勤務不可</option>{types.filter((type) => !type.deletedAt).map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label><button onClick={() => setNgPairs(ngPairs.filter((_, i) => i !== index))}>この組み合わせを削除</button></div>)}<button disabled={staff.length < 2} onClick={() => setNgPairs([...ngPairs, { staffId1: staff[0].id, staffId2: staff[1].id }])}>NGペアを追加</button></fieldset>
             <fieldset><legend>翌日ルール</legend><p>例：夜勤入りの翌日は夜勤明けにする、などを設定します。</p>{sequenceRules.map((rule, index) => <div className="rule-row" key={`${rule.firstShiftTypeId}-${rule.secondShiftTypeId}-${index}`}><label>前日<select value={rule.firstShiftTypeId} onChange={(e) => setSequenceRules(sequenceRules.map((x, i) => i === index ? { ...x, firstShiftTypeId: Number(e.target.value) } : x))}>{types.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の勤務種別"}</option>)}</select></label><label>翌日<select value={rule.secondShiftTypeId} onChange={(e) => setSequenceRules(sequenceRules.map((x, i) => i === index ? { ...x, secondShiftTypeId: Number(e.target.value) } : x))}>{types.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の勤務種別"}</option>)}</select></label><button onClick={() => setSequenceRules(sequenceRules.filter((_, i) => i !== index))}>このルールを削除</button></div>)}<button disabled={types.length < 2} onClick={() => setSequenceRules([...sequenceRules, { firstShiftTypeId: types[0].id, secondShiftTypeId: types[1].id }])}>翌日ルールを追加</button></fieldset>
+            <WeeklyRequirementsPanel roles={roles} shiftTypes={types} values={weeklyRoleRequirements} setValues={setWeeklyRoleRequirements} />
             <UnavailablePanel staff={staff} shiftTypes={types} conditions={unavailableConditions} setConditions={setUnavailableConditions} />
           </section>}
         </div>

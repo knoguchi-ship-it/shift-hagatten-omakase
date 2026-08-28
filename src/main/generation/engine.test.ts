@@ -259,4 +259,30 @@ describe("validateCells", () => {
     });
     expect(violations.some((v) => v.type === "UNAVAILABLE")).toBe(true);
   });
+
+  it("applies a scoped NG pair only when both staff have the selected shift type", () => {
+    const secondWorkType: ShiftType = { ...workType, id: 3, name: "遅番", shortName: "遅" };
+    const sameType = validateCells({
+      ...baseArgs,
+      shiftTypes: [workType, secondWorkType, holidayType],
+      cells: [
+        { targetDate: "2026-08-01", staffId: 1, shiftTypeId: workType.id, isRequestHoliday: 0 },
+        { targetDate: "2026-08-01", staffId: 2, shiftTypeId: workType.id, isRequestHoliday: 0 },
+      ],
+      ngPairs: [{ staffId1: 1, staffId2: 2, shiftTypeId: workType.id }],
+      sequenceRules: [],
+    });
+    const differentType = validateCells({
+      ...baseArgs,
+      shiftTypes: [workType, secondWorkType, holidayType],
+      cells: [
+        { targetDate: "2026-08-01", staffId: 1, shiftTypeId: workType.id, isRequestHoliday: 0 },
+        { targetDate: "2026-08-01", staffId: 2, shiftTypeId: secondWorkType.id, isRequestHoliday: 0 },
+      ],
+      ngPairs: [{ staffId1: 1, staffId2: 2, shiftTypeId: workType.id }],
+      sequenceRules: [],
+    });
+    expect(sameType.some((violation) => violation.type === "NG_PAIR")).toBe(true);
+    expect(differentType.some((violation) => violation.type === "NG_PAIR")).toBe(false);
+  });
 });

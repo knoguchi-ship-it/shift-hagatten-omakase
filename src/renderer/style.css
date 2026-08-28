@@ -432,6 +432,9 @@ main {
 .inline-message { margin: 10px 0; color: #17676b; font-size: 13px; font-weight: 700; }
 .month-list { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
 .month-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #dce8e7; }
+.month-actions { display: inline-flex; gap: 8px; }
+.danger-button { border-color: #bd5b5b; color: #8a2424; background: #fff; }
+.danger-button:hover { background: #fff1f1; }
 .empty-state { color: #587174; }
 .toolbar { gap: 16px; flex-wrap: wrap; }
 .toolbar > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -470,6 +473,25 @@ table.master-table { width: 100%; min-width: 760px; border-collapse: separate; b
 .color-field { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #587174; }
 .checkbox-label { display: inline-flex; gap: 7px; align-items: center; white-space: nowrap; font-size: 13px; }
 .checkbox-label input { width: auto; min-width: 0; }
+.checkbox-cell { text-align: center !important; }
+.checkbox-cell input { width: 18px; height: 18px; accent-color: #237b7e; }
+.shift-type-table { table-layout: fixed; }
+.shift-type-name-col { width: 23%; }
+.shift-type-short-col { width: 12%; }
+.shift-type-color-col { width: 16%; }
+.shift-type-time-col { width: 15%; }
+.shift-type-work-col { width: 19%; }
+.role-table { min-width: 690px !important; }
+.role-table th small { display: inline-block; margin-top: 3px; color: #587174; font-weight: 400; }
+.role-table th:nth-child(1) { width: 42%; }
+.role-table th:nth-child(2) { width: 19%; }
+.role-table th:nth-child(3) { width: 25%; }
+.weekly-requirements { margin-top: 0; }
+.weekly-requirements .field-label { max-width: 260px; }
+.weekly-requirements .field-label select { display: block; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #b9caca; border-radius: 4px; background: #fff; }
+.weekly-requirement-table { min-width: 760px !important; }
+.weekly-requirement-table th:not(:first-child), .weekly-requirement-table td { text-align: center; }
+.weekly-requirement-table .count { width: 58px; min-width: 58px; text-align: center; }
 .lifecycle-details { margin-top: 16px; }
 .lifecycle-details summary { cursor: pointer; color: #1e666a; font-weight: 700; }
 .lifecycle-details > p { margin: 14px 0; font-size: 13px; }

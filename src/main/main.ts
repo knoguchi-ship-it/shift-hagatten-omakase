@@ -42,6 +42,7 @@ import type {
   ShiftType,
   Staff,
   UnavailableCondition,
+  WeeklyRoleRequirement,
 } from "../shared/types";
 
 let mainWindow: BrowserWindow | undefined;
@@ -377,6 +378,7 @@ app.whenReady().then(() => {
       ngPairs: NgPair[];
       sequenceRules: SequenceRule[];
       unavailableConditions: UnavailableCondition[];
+      weeklyRoleRequirements: WeeklyRoleRequirement[];
     },
     unknown
   >("app:save-configuration", SaveConfigurationSchema, (payload) =>
@@ -468,6 +470,9 @@ app.whenReady().then(() => {
   });
   safeHandle<string, unknown>("app:create-month", MonthSchema, (month) =>
     database.createMonth(month),
+  );
+  safeHandle<string, unknown>("app:delete-month", MonthSchema, (month) =>
+    database.deleteMonth(month),
   );
   safeHandle<string, unknown>("app:get-month", MonthSchema, (month) =>
     database.getMonth(month),

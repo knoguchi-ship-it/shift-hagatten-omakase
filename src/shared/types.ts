@@ -31,7 +31,8 @@ export type Staff = {
   deletedAt?: string | null;
 };
 
-export type NgPair = { staffId1: Id; staffId2: Id };
+/** shiftTypeId が未指定なら、勤務種別を問わず同日に勤務不可。 */
+export type NgPair = { staffId1: Id; staffId2: Id; shiftTypeId?: Id | null };
 
 export type SequenceRule = {
   firstShiftTypeId: Id;
@@ -40,6 +41,14 @@ export type SequenceRule = {
 
 export type RoleRequirement = {
   targetDate: string;
+  shiftTypeId: Id;
+  roleId: Id;
+  requiredCount: number;
+};
+
+/** 新しい月を作成するときだけ展開する、曜日別の必要人数既定値。 */
+export type WeeklyRoleRequirement = {
+  weekday: number;
   shiftTypeId: Id;
   roleId: Id;
   requiredCount: number;
@@ -92,6 +101,7 @@ export type Boot = {
   sequenceRules: SequenceRule[];
   roles: Role[];
   unavailableConditions: UnavailableCondition[];
+  weeklyRoleRequirements: WeeklyRoleRequirement[];
 };
 
 export type MonthData = Boot & {
