@@ -9,6 +9,7 @@
 - `npm run test:e2e` は未解消のGPUプロセスDLL初期化失敗により、このホストではRendererを起動できない。インストーラ実機起動、50名×31日操作、スクリーンリーダー、独立評価も未実施。従って出荷・完成判定は不可。
 - 配布状態を再確認した。外部デプロイ先、CI/CD設定、Gitリモート/履歴はこの作業ツリーで確認できない。`dist/release/`の唯一のインストーラは2026-08-02作成のv0.1.0（未署名）で、現行ソースのビルド・E2E・実機起動を経た成果物ではない。デプロイ済み・出荷済みとして扱わない。
 - GitHub公開を実施した。`https://github.com/knoguchi-ship-it/shift-hagatten-omakase` を公開リポジトリとして作成し、ローカルGitを初期化して初回コミットを`main`へpushした。`.gitignore`でログ、SQLite、生成物、過去のブラウザ出力を除外済み。GitHub公開はソース管理の開始であり、未検証の配布物を出荷したことを意味しない。
+- 現行ソースからWindows NSIS候補インストーラv0.1.0を`installer_output/`へ生成した。`npm run build`は成功し、インストーラ本体と展開版を生成できたが、署名状態は`NotSigned`、アプリアイコンはElectron既定、`package.json`の`description`/`author`未設定である。E2E、実機起動、インストール/アンインストール検証は未完了のため、`dist/release/`へ移動・配布しない。
 
 ### 次に再開する具体的作業
 
