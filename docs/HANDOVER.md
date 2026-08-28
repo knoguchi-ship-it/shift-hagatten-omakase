@@ -1,5 +1,13 @@
 # 引継ぎ — 2026-08-28
 
+## Latest update (2026-08-28: Windows Electron crash mitigation)
+
+- User reported repeated Electron JIT debugger dialogs: `electron.exe` exception `0x80000003`. The local Playwright run confirmed both Electron E2E tests crash before the renderer is ready, and left three Playwright-loader Electron processes; those exact processes were identified and terminated.
+- This matches a current Windows 11 25H2/build-26200 Electron/Chromium GPU-sandbox regression. Before `app.whenReady`, the app now calls `app.disableHardwareAcceleration()` and appends `disable-gpu-sandbox`. BrowserWindow renderer sandboxing remains enabled.
+- To prevent the automated work process from showing user-facing JIT dialogs again, normal `npm run test:e2e` skips the Electron tests on this host. The opt-in command is `npm run test:e2e:electron` (sets `RUN_ELECTRON_E2E=1`). Formal Electron E2E remains unverified on this Windows environment and must be run after the platform issue is resolved or on a known-good Windows host.
+- Verification: `npm run typecheck`, `npm test` (33 tests), and `npm run build` passed. `npm run test:e2e` reports 2 intentional skips without starting Electron. New test installer: `installer_output/ui-review-windows-crash-mitigation/シフトはがってんおまかせ！ Setup 0.1.0.exe`.
+- Do not label this as a production release: signed production package, updated application metadata/icon, a successful real Electron E2E run, and manual Windows launch verification remain required.
+
 ## Latest update (2026-08-28: responsive roster and active-staff setup)
 
 - Shift-editor day columns now calculate their width from the available viewport. The employee/name columns remain fixed, and at normal desktop width the full 31-day month is shown without horizontal scrolling. Narrow windows retain one horizontal scroll surface for the date cells only.

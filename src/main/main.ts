@@ -52,6 +52,15 @@ const generationJobs = new Map<number, { worker: Worker; cancelSignal: Int32Arra
 let generationJobCounter = 0;
 let rendererHasUnsavedChanges = false;
 
+// Windows 11 25H2 (build 26200 系) では Chromium のGPUサンドボックス初期化が
+// EXCEPTION_BREAKPOINT (0x80000003) で落ちる既知事例がある。
+// Renderer の sandbox: true は維持したまま、GPU経路だけをソフトウェア描画へ退避する。
+// これは app.whenReady() より前に設定しなければならない。
+if (process.platform === "win32") {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("disable-gpu-sandbox");
+}
+
 // `file://` は任意のローカルファイルへの到達面を広げるため使わない。`bypassCSP` は
 // 明示せず false を維持し、アプリ配布物だけを配信する安全な標準スキームにする。
 protocol.registerSchemesAsPrivileged([
