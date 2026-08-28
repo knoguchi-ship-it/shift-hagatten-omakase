@@ -8,7 +8,7 @@
 - 直近の検証は `npm run typecheck`、`npm test`（6ファイル・28件）、`npm run build` が成功。ViteのCJS設定に関する将来互換性警告は継続。`npm audit --omit=dev` はhigh/critical 0件、`exceljs`経由の`uuid`にmoderate 2件を検出し、破壊的な自動修正は未適用。
 - `npm run test:e2e` は未解消のGPUプロセスDLL初期化失敗により、このホストではRendererを起動できない。インストーラ実機起動、50名×31日操作、スクリーンリーダー、独立評価も未実施。従って出荷・完成判定は不可。
 - 配布状態を再確認した。外部デプロイ先、CI/CD設定、Gitリモート/履歴はこの作業ツリーで確認できない。`dist/release/`の唯一のインストーラは2026-08-02作成のv0.1.0（未署名）で、現行ソースのビルド・E2E・実機起動を経た成果物ではない。デプロイ済み・出荷済みとして扱わない。
-- GitHub公開の準備として`knoguchi-ship-it`のCLI再認証を開始したが、GitHub Device Flowの本人認証が未完了のため中止した。認証完了後に、非公開リポジトリの作成、Gitメタデータの復旧/初期化、初回pushを行う。
+- GitHub公開を実施した。`https://github.com/knoguchi-ship-it/shift-hagatten-omakase` を公開リポジトリとして作成し、ローカルGitを初期化して初回コミットを`main`へpushした。`.gitignore`でログ、SQLite、生成物、過去のブラウザ出力を除外済み。GitHub公開はソース管理の開始であり、未検証の配布物を出荷したことを意味しない。
 
 ### 次に再開する具体的作業
 
