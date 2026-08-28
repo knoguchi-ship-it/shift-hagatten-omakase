@@ -1,0 +1,24 @@
+# Dependencies and generated application artifacts
+node_modules/
+dist/
+out/
+coverage/
+playwright-report/
+test-results/
+.playwright-cli/
+
+# Local data, backups, logs, and credentials
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.log
+*.bak
+.env
+.env.*
+!.env.example
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/

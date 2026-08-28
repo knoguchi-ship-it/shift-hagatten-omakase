@@ -1,0 +1,61 @@
+{
+  "name": "shift-hagatten-omakase",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite --host 127.0.0.1",
+    "dev:electron": "set ELECTRON_RENDERER_URL=http://127.0.0.1:5173&& wait-on tcp:5173 && electron .",
+    "build": "tsc -p tsconfig.main.build.json && vite build",
+    "package:win": "npm run build && electron-builder --win nsis",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.renderer.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "better-sqlite3": "latest",
+    "exceljs": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-window": "latest",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@vitejs/plugin-react": "latest",
+    "@types/better-sqlite3": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "concurrently": "latest",
+    "electron": "latest",
+    "electron-builder": "latest",
+    "prettier": "^3.9.6",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "^4.1.10",
+    "wait-on": "latest"
+  },
+  "build": {
+    "appId": "jp.shiftc.care-shift",
+    "productName": "シフトはがってんおまかせ！",
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
+      "runAfterFinish": true
+    }
+  }
+}
