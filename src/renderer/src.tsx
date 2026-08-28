@@ -97,14 +97,14 @@ function App() {
     },
     [],
   );
-  const create = async () => {
+  const create = async (nextPage: "conditions" | "edit" = "edit") => {
     const d = await window.shiftApi.createMonth(month);
     setData(d);
     setSavedData(d);
     setActiveMonth(month);
     setMonthDirty(false);
     setBoot(d);
-    setPage("edit");
+    setPage(nextPage);
   };
   const openExistingMonth = async (targetMonth: string) => {
     if (!confirmDiscard()) return;
@@ -133,7 +133,7 @@ function App() {
       if (!confirmDiscard()) return;
       discardMonthChanges();
       setSettingsDirty(false);
-      await create();
+      await create(next === "conditions" ? "conditions" : "edit");
       if (next === "conditions") setPage("conditions");
       return;
     }
@@ -161,31 +161,37 @@ function App() {
   return (
     <div className="app">
       <aside>
-        <h1>介護シフト</h1>
-        <button
-          className={page === "home" ? "active" : ""}
-          onClick={() => void navigate("home")}
-        >
-          ダッシュボード
-        </button>
-        <button
-          className={page === "conditions" ? "active" : ""}
-          onClick={() => void navigate("conditions")}
-        >
-          条件設定
-        </button>
-        <button
-          className={page === "edit" ? "active" : ""}
-          onClick={() => void navigate("edit")}
-        >
-          シフト編集
-        </button>
-        <button
-          className={page === "settings" ? "active" : ""}
-          onClick={() => void navigate("settings")}
-        >
-          マスタ・ルール設定
-        </button>
+        <div className="app-brand">
+          <p>介護施設向け勤務表</p>
+          <h1>シフトはがってん<br />おまかせ！</h1>
+        </div>
+        <nav className="primary-navigation" aria-label="主な画面">
+          <button
+            className={page === "home" ? "active" : ""}
+            onClick={() => void navigate("home")}
+          >
+            <span>01</span> 月を選ぶ
+          </button>
+          <button
+            className={page === "conditions" ? "active" : ""}
+            onClick={() => void navigate("conditions")}
+          >
+            <span>02</span> 条件を設定
+          </button>
+          <button
+            className={page === "edit" ? "active" : ""}
+            onClick={() => void navigate("edit")}
+          >
+            <span>03</span> 確認・編集
+          </button>
+          <button
+            className={page === "settings" ? "active" : ""}
+            onClick={() => void navigate("settings")}
+          >
+            <span>管理</span> マスタ・制約
+          </button>
+        </nav>
+        <p className="navigation-help">月ごとの作業は、上から順に進めます。</p>
       </aside>
       <main>
         {page === "home" && (
@@ -204,6 +210,7 @@ function App() {
             setData={setMonthData}
             notify={setNotice}
             onSaved={markMonthSaved}
+            onOpenEditor={() => setPage("edit")}
           />
         )}{" "}
         {page === "edit" && data && (
@@ -243,36 +250,50 @@ function Home({
 }: {
   month: string;
   setMonth: (v: string) => void;
-  create: () => void;
+  create: (nextPage?: "conditions" | "edit") => void;
   open: (month: string) => Promise<void>;
   months: { month: string }[];
 }) {
   return (
-    <section>
-      <h2>ダッシュボード</h2>
-      <div className="card">
-        <h3>新規シフトを作成</h3>
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-        />
-        <button className="primary" onClick={create}>
-          条件設定・シフト編集へ
-        </button>
+    <section className="page-shell">
+      <header className="page-header">
+        <p className="eyebrow">月次勤務表</p>
+        <h2>勤務表を作成・再開する</h2>
+        <p>対象月を選び、希望休と必要人数を設定してから自動生成・編集へ進みます。</p>
+      </header>
+      <div className="dashboard-grid">
+        <section className="card action-card" aria-labelledby="new-month-heading">
+          <p className="step-badge">はじめに</p>
+          <h3 id="new-month-heading">新しい月を作成</h3>
+          <label className="field-label" htmlFor="new-month">対象月</label>
+          <input
+            id="new-month"
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+          />
+          <p className="field-help">勤務表の枠を作成します。作成後、希望休と必要人数の設定画面を開きます。</p>
+          <button className="primary" onClick={() => create("conditions")}>
+            この月を作成して条件を設定
+          </button>
+        </section>
+        <section className="card" aria-labelledby="existing-month-heading">
+          <p className="step-badge muted">続きから</p>
+          <h3 id="existing-month-heading">作成済みの月を開く</h3>
+          {months.length ? (
+            <ul className="month-list">
+              {months.map((x) => (
+                <li key={x.month}>
+                  <strong>{x.month.replace("-", "年")}月</strong>
+                  <button onClick={() => void open(x.month)}>開く</button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty-state">まだ作成済みの勤務表はありません。</p>
+          )}
+        </section>
       </div>
-      <h3>作成済みシフト</h3>
-      {months.length ? (
-        <ul>
-          {months.map((x) => (
-            <li key={x.month}>
-              {x.month} <button onClick={() => void open(x.month)}>開く</button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>まだシフトはありません。</p>
-      )}
     </section>
   );
 }
@@ -282,12 +303,14 @@ function Conditions({
   setData,
   notify,
   onSaved,
+  onOpenEditor,
 }: {
   data: MonthData;
   month: string;
   setData: (d: MonthData) => void;
   notify: (s: string) => void;
   onSaved: (d: MonthData) => void;
+  onOpenEditor: () => void;
 }) {
   const days = useMemo(() => daysInMonth(month), [month]);
   const workTypes = data.shiftTypes.filter((t) => t.countsAsWork && !t.deletedAt);
@@ -342,29 +365,41 @@ function Conditions({
       });
       onSaved(data);
       notify("条件を保存しました");
+      return true;
     } catch {
       notify("条件を保存できませんでした。入力内容を確認して、もう一度お試しください。");
+      return false;
     }
   };
   return (
-    <section className="conditions">
-      <div className="toolbar">
+    <section className="page-shell conditions">
+      <header className="page-header page-header-with-action">
         <div>
-          <h2>{month} 条件設定</h2>
-          <span>希望休と、日付・勤務種別・職種ごとの必要人数を設定します。</span>
+          <p className="eyebrow">手順 2 / 3</p>
+          <h2>{month.replace("-", "年")}月の条件を設定</h2>
+          <p>自動生成の前に、希望休と必要人数を設定します。ここで保存してから「シフト編集」へ進みます。</p>
         </div>
-        <button className="primary" onClick={save}>
-          条件を保存
+        <button onClick={() => void save()}>
+          下書きを保存
         </button>
-      </div>
-      <h3>希望休</h3>
+        <button
+          className="primary"
+          onClick={async () => {
+            if (await save()) onOpenEditor();
+          }}
+        >
+          保存してシフト編集へ
+        </button>
+      </header>
+      <section className="condition-card" aria-labelledby="holiday-heading">
+      <div className="section-heading"><div><p className="step-badge">条件 1</p><h3 id="holiday-heading">希望休</h3><p>希望休にする日をクリックしてください。もう一度クリックすると解除できます。</p></div></div>
       <div className="grid-wrap">
         <table>
           <thead>
             <tr>
               <th>氏名</th>
               {days.map((d) => (
-                <th key={d}>{Number(d.slice(-2))}</th>
+                <th key={d}><small>{Number(d.slice(-2))}</small><br /><em>{WEEKDAY_LABELS[new Date(`${d}T00:00:00`).getDay()]}</em></th>
               ))}
             </tr>
           </thead>
@@ -392,7 +427,9 @@ function Conditions({
           </tbody>
         </table>
       </div>
-      <h3>日別必要人数（職種別）</h3>
+      </section>
+      <section className="condition-card" aria-labelledby="requirement-heading">
+      <div className="section-heading"><div><p className="step-badge">条件 2</p><h3 id="requirement-heading">日別の必要人数</h3><p>勤務種別と職種ごとに、その日に必要な人数を入力します。</p></div></div>
       <div className="form-row">
         <label>
           勤務種別
@@ -417,7 +454,7 @@ function Conditions({
             <tr>
               <th>職種</th>
               {days.map((d) => (
-                <th key={d}>{Number(d.slice(-2))}</th>
+                <th key={d}><small>{Number(d.slice(-2))}</small><br /><em>{WEEKDAY_LABELS[new Date(`${d}T00:00:00`).getDay()]}</em></th>
               ))}
             </tr>
           </thead>
@@ -446,6 +483,7 @@ function Conditions({
           </tbody>
         </table>
       </div>
+      </section>
     </section>
   );
 }
@@ -845,11 +883,12 @@ function Editor({
     if (row >= 0 && col >= 0) setJumpRequest({ row, col });
   };
   return (
-    <section className="editor">
+    <section className="page-shell editor">
       <div className="toolbar">
         <div>
-          <h2>{month} シフト編集</h2>
-          <span>{pending.length ? "未保存の変更があります" : "保存済み"}</span>
+          <p className="eyebrow">手順 3 / 3</p>
+          <h2>{month.replace("-", "年")}月の勤務表を確認・編集</h2>
+          <span>{pending.length ? "編集したセルはまだ保存されていません" : "保存済みの勤務表です"}</span>
         </div>
         <div>
           {job ? (
@@ -860,11 +899,11 @@ function Editor({
               <button onClick={cancelGenerate}>中止</button>
             </>
           ) : (
-            <button onClick={startGenerate}>自動生成</button>
+            <button onClick={startGenerate}>条件を反映して自動生成</button>
           )}
-          <button onClick={save}>変更を保存</button>
+          <button onClick={save}>編集したセルを保存</button>
           <button className="primary" onClick={exportXlsx}>
-            Excelへ出力
+            Excelへ出力（保存済みのみ）
           </button>
         </div>
       </div>
@@ -1190,7 +1229,7 @@ function UnavailablePanel({
   );
 }
 
-function Settings({
+function LegacySettings({
   boot,
   onSaved,
   onMasterChanged,
@@ -1598,6 +1637,135 @@ function Settings({
       <button className="primary" onClick={save}>
         設定を保存
       </button>
+    </section>
+  );
+}
+
+type MasterSection = "roles" | "staff" | "types" | "rules";
+
+function Settings({
+  boot,
+  onSaved,
+  onMasterChanged,
+  onDirty,
+  onError,
+}: {
+  boot: Boot;
+  onSaved: (b: Boot) => void;
+  onMasterChanged: () => Promise<void>;
+  onDirty: (dirty: boolean) => void;
+  onError: (message: string) => void;
+}) {
+  const [section, setSection] = useState<MasterSection>("staff");
+  const [staff, setStaff] = useState(boot.staff);
+  const [types, setTypes] = useState(boot.shiftTypes);
+  const [ngPairs, setNgPairs] = useState(boot.ngPairs);
+  const [sequenceRules, setSequenceRules] = useState(boot.sequenceRules);
+  const [unavailableConditions, setUnavailableConditions] = useState(boot.unavailableConditions);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const initialSettings = useRef("");
+  const settingState = () => JSON.stringify({ staff, types, ngPairs, sequenceRules, unavailableConditions });
+  if (!initialSettings.current) initialSettings.current = settingState();
+  useEffect(() => {
+    window.shiftApi.listRoles().then(setRoles);
+  }, [boot]);
+  useEffect(() => {
+    onDirty(settingState() !== initialSettings.current);
+  }, [staff, types, ngPairs, sequenceRules, unavailableConditions, onDirty]);
+  const updateStaff = (index: number, change: Partial<Staff>) =>
+    setStaff(staff.map((item, i) => (i === index ? { ...item, ...change } : item)));
+  const updateType = (index: number, change: Partial<ShiftType>) =>
+    setTypes(types.map((item, i) => (i === index ? { ...item, ...change } : item)));
+  const save = async () => {
+    try {
+      const updated = await window.shiftApi.saveConfiguration({
+        staff,
+        shiftTypes: types,
+        ngPairs,
+        sequenceRules,
+        unavailableConditions,
+      });
+      initialSettings.current = settingState();
+      onDirty(false);
+      onSaved(updated);
+    } catch {
+      onError("保存できませんでした。赤字の項目や、職員・勤務種別・制約の組み合わせを確認してください。");
+    }
+  };
+  const employmentType = (value: string) => (value === "full" ? "常勤" : value || "その他");
+  const selectStaff = (value: string) => Number(value);
+  return (
+    <section className="page-shell master-page">
+      <header className="page-header page-header-with-action">
+        <div>
+          <p className="eyebrow">マスタ・制約</p>
+          <h2>勤務表を作るための基本設定</h2>
+          <p>一度に編集するのは一種類だけです。入力後は右上の「設定を保存」で反映します。</p>
+        </div>
+        <button className="primary" onClick={() => void save()}>設定を保存</button>
+      </header>
+      <div className="master-layout">
+        <nav className="master-tabs" aria-label="設定の種類">
+          {([
+            ["roles", "職種", "必要人数で使う職種を管理"],
+            ["staff", "職員", "氏名・雇用区分・勤務日数を管理"],
+            ["types", "勤務種別", "勤務時間・略称・勤務日扱いを管理"],
+            ["rules", "制約", "NGペア・翌日ルール・勤務不可を設定"],
+          ] as [MasterSection, string, string][]).map(([id, label, description]) => (
+            <button key={id} className={section === id ? "active" : ""} onClick={() => setSection(id)}>
+              <strong>{label}</strong><small>{description}</small>
+            </button>
+          ))}
+        </nav>
+        <div className="master-content">
+          {section === "roles" && <RolesPanel staff={staff} onChanged={onMasterChanged} />}
+          {section === "staff" && (
+            <>
+              <section className="master-panel" aria-labelledby="staff-master-heading">
+                <div className="panel-heading">
+                  <div><h3 id="staff-master-heading">職員マスタ</h3><p>氏名、主職種、雇用区分、月間の勤務日数の目安を登録します。</p></div>
+                  <button onClick={() => setStaff([...staff, { id: -Date.now() - staff.length, name: "", roleId: null, roleName: "", employmentType: "常勤", minDays: null, maxDays: null }])}>職員を追加</button>
+                </div>
+                <div className="master-table-wrap"><table className="master-table"><thead><tr><th>氏名</th><th>主職種</th><th>雇用区分</th><th>月間下限<br /><small>日</small></th><th>月間上限<br /><small>日</small></th></tr></thead><tbody>
+                  {staff.map((item, index) => <tr key={item.id}>
+                    <td><label><span className="sr-only">氏名</span><input value={item.name} placeholder="例：山田 花子" onChange={(e) => updateStaff(index, { name: e.target.value })} /></label></td>
+                    <td><label><span className="sr-only">主職種</span><select value={item.roleId ?? ""} onChange={(e) => updateStaff(index, { roleId: e.target.value ? Number(e.target.value) : null })}><option value="">未設定</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label></td>
+                    <td><label><span className="sr-only">雇用区分</span><select value={employmentType(item.employmentType)} onChange={(e) => updateStaff(index, { employmentType: e.target.value })}><option value="常勤">常勤</option><option value="非常勤">非常勤</option><option value="パート">パート</option><option value="派遣">派遣</option><option value="その他">その他</option></select></label></td>
+                    <td><label><span className="sr-only">月間勤務日数の下限</span><input type="number" min="0" value={item.minDays ?? ""} onChange={(e) => updateStaff(index, { minDays: e.target.value ? Number(e.target.value) : null })} /></label></td>
+                    <td><label><span className="sr-only">月間勤務日数の上限</span><input type="number" min="0" value={item.maxDays ?? ""} onChange={(e) => updateStaff(index, { maxDays: e.target.value ? Number(e.target.value) : null })} /></label></td>
+                  </tr>)}
+                </tbody></table></div>
+              </section>
+              <details className="lifecycle-details"><summary>職員を削除・復元する</summary><p>削除しても過去の勤務表は消えません。削除済みの職員はここから復元できます。</p><StaffLifecyclePanel onChanged={onMasterChanged} /></details>
+            </>
+          )}
+          {section === "types" && (
+            <>
+              <section className="master-panel" aria-labelledby="shift-type-master-heading">
+                <div className="panel-heading"><div><h3 id="shift-type-master-heading">勤務種別マスタ</h3><p>表に表示する略称と、勤務時間・勤務日として数えるかを設定します。</p></div><button onClick={() => setTypes([...types, { id: -Date.now() - types.length, name: "", shortName: "", colorCode: "#ffffff", startTime: null, endTime: null, countsAsWork: 1 }])}>勤務種別を追加</button></div>
+                <div className="master-table-wrap"><table className="master-table shift-type-table"><thead><tr><th>名称</th><th>略称</th><th>色</th><th>開始</th><th>終了</th><th>勤務日として数える</th></tr></thead><tbody>
+                  {types.map((item, index) => <tr key={item.id}>
+                    <td><label><span className="sr-only">勤務種別名称</span><input value={item.name} placeholder="例：日勤" onChange={(e) => updateType(index, { name: e.target.value })} /></label></td>
+                    <td><label><span className="sr-only">表の略称</span><input value={item.shortName} placeholder="例：日" maxLength={20} onChange={(e) => updateType(index, { shortName: e.target.value })} /></label></td>
+                    <td><label className="color-field"><span className="sr-only">表示色</span><input type="color" value={item.colorCode} onChange={(e) => updateType(index, { colorCode: e.target.value })} /><span>{item.colorCode}</span></label></td>
+                    <td><label><span className="sr-only">開始時刻</span><input type="time" value={item.startTime ?? ""} onChange={(e) => updateType(index, { startTime: e.target.value || null })} /></label></td>
+                    <td><label><span className="sr-only">終了時刻</span><input type="time" value={item.endTime ?? ""} onChange={(e) => updateType(index, { endTime: e.target.value || null })} /></label></td>
+                    <td><label className="checkbox-label"><input type="checkbox" checked={Boolean(item.countsAsWork)} onChange={(e) => updateType(index, { countsAsWork: e.target.checked ? 1 : 0 })} />勤務日として集計</label></td>
+                  </tr>)}
+                </tbody></table></div>
+              </section>
+              <details className="lifecycle-details"><summary>勤務種別を削除・復元する</summary><p>削除しても過去月の勤務表は保持されます。削除済みの勤務種別はここから復元できます。</p><ShiftTypeLifecyclePanel onChanged={onMasterChanged} /></details>
+            </>
+          )}
+          {section === "rules" && <section className="master-panel rules-panel" aria-labelledby="rules-heading">
+            <div className="panel-heading"><div><h3 id="rules-heading">勤務の制約</h3><p>自動生成で守るべき組み合わせと、職員ごとの勤務不可条件を設定します。</p></div></div>
+            <fieldset><legend>同じ日に勤務できない組み合わせ（NGペア）</legend><p>同日に入れてはいけない職員の組み合わせを登録します。</p>{ngPairs.map((pair, index) => <div className="rule-row" key={`${pair.staffId1}-${pair.staffId2}-${index}`}><label>職員A<select value={pair.staffId1} onChange={(e) => setNgPairs(ngPairs.map((x, i) => i === index ? { ...x, staffId1: selectStaff(e.target.value) } : x))}>{staff.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の職員"}</option>)}</select></label><label>職員B<select value={pair.staffId2} onChange={(e) => setNgPairs(ngPairs.map((x, i) => i === index ? { ...x, staffId2: selectStaff(e.target.value) } : x))}>{staff.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の職員"}</option>)}</select></label><button onClick={() => setNgPairs(ngPairs.filter((_, i) => i !== index))}>この組み合わせを削除</button></div>)}<button disabled={staff.length < 2} onClick={() => setNgPairs([...ngPairs, { staffId1: staff[0].id, staffId2: staff[1].id }])}>NGペアを追加</button></fieldset>
+            <fieldset><legend>翌日ルール</legend><p>例：夜勤入りの翌日は夜勤明けにする、などを設定します。</p>{sequenceRules.map((rule, index) => <div className="rule-row" key={`${rule.firstShiftTypeId}-${rule.secondShiftTypeId}-${index}`}><label>前日<select value={rule.firstShiftTypeId} onChange={(e) => setSequenceRules(sequenceRules.map((x, i) => i === index ? { ...x, firstShiftTypeId: Number(e.target.value) } : x))}>{types.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の勤務種別"}</option>)}</select></label><label>翌日<select value={rule.secondShiftTypeId} onChange={(e) => setSequenceRules(sequenceRules.map((x, i) => i === index ? { ...x, secondShiftTypeId: Number(e.target.value) } : x))}>{types.map((item) => <option value={item.id} key={item.id}>{item.name || "未入力の勤務種別"}</option>)}</select></label><button onClick={() => setSequenceRules(sequenceRules.filter((_, i) => i !== index))}>このルールを削除</button></div>)}<button disabled={types.length < 2} onClick={() => setSequenceRules([...sequenceRules, { firstShiftTypeId: types[0].id, secondShiftTypeId: types[1].id }])}>翌日ルールを追加</button></fieldset>
+            <UnavailablePanel staff={staff} shiftTypes={types} conditions={unavailableConditions} setConditions={setUnavailableConditions} />
+          </section>}
+        </div>
+      </div>
+      <div className="page-footer-actions"><button className="primary" onClick={() => void save()}>設定を保存</button></div>
     </section>
   );
 }
