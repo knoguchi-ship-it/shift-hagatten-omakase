@@ -107,6 +107,22 @@ describe("ShiftDatabase backup/restore", () => {
 });
 
 describe("ShiftDatabase logical deletion history", () => {
+  it("keeps a departed staff member in past-month history but excludes them from new months and generation", () => {
+    const db = open(path.join(dir, "staff-history.sqlite"));
+    addStaffWithRole(db, "退職者");
+    db.createMonth("2026-10");
+    const staff = db.staff()[0];
+
+    db.setStaffDeleted(staff.id, true);
+
+    expect(db.staff()).toEqual([]);
+    expect(db.getMonth("2026-10").staff).toContainEqual(
+      expect.objectContaining({ id: staff.id, deletedAt: expect.any(String) }),
+    );
+    expect(db.getGenerationInput("2026-10").staff).toEqual([]);
+    expect(db.createMonth("2026-11").staff).toEqual([]);
+  });
+
   it("keeps a deleted shift type available for the month that references it", () => {
     const db = open(path.join(dir, "history.sqlite"));
     const dayShift = db.shiftTypes().find((type) => type.shortName === "日")!;

@@ -1,5 +1,20 @@
 # 引継ぎ — 2026-08-28
 
+## Latest update (2026-08-28: responsive roster and active-staff setup)
+
+- Shift-editor day columns now calculate their width from the available viewport. The employee/name columns remain fixed, and at normal desktop width the full 31-day month is shown without horizontal scrolling. Narrow windows retain one horizontal scroll surface for the date cells only.
+- The weekday staffing-default editor is now a dedicated `必要人数` settings tab and displays every active work shift type × role together. Each numeric entry has a `人` suffix; weekday headers no longer repeat `必要人数`.
+- The existing safe logical-delete mechanism is presented as `在職・離職`. A departed employee is excluded from active master/conditions/new-month/generation targets, but is retained for historical month display and Excel data. The lifecycle view supports returning them to active employment.
+- Verification: `npm run typecheck` passed; `npm test` passed (6 files, 33 tests); `npm run build` passed; `npm run test:e2e` exited 0. New Windows test installer is `installer_output/ui-review-responsive-roster/シフトはがってんおまかせ！ Setup 0.1.0.exe`. It is not a formal release; `dist/release/` remains untouched.
+- Next: manually check the responsive editor at 31 days on the target Windows display and review the active/retired workflow. Do not promote this candidate to a release until metadata, icon, signing, and audit follow-up are complete.
+
+## UI feedback pending (2026-08-28)
+
+- The weekday staffing-default screen must show all configured work shift types together, rather than requiring the user to choose a single type from a select control. Remove repeated `必要人数` text under each weekday; present each numeric input with a `人` unit instead.
+- Reassess settings navigation as the master/rules area grows: either split these into clearer left-menu destinations or provide a dedicated settings tab hierarchy, without burying frequently used monthly-default settings.
+- Add employment status to staff. Only active employees should be available for normal staff/master/condition setup. Former employees must be retained as historical records but moved out of the active list, with a separate restore/history view.
+- Next implementation should first agree the information architecture, then add the data model/migration and UI with regression coverage. No change has been made for this feedback yet.
+
 ## Latest update (2026-08-28: master labels, weekly defaults, and safe month deletion)
 
 - UI design reviewed against Microsoft form/label guidance and W3C WAI labels/fieldset guidance. Role master now exposes named columns: role name, display order (smaller appears first), usage status (assigned staff count), and action.

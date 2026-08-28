@@ -241,8 +241,9 @@ em {
 .shift-grid-wrap {
   border: 1px solid #b6c6c6;
   background: #fff;
-  display: inline-block;
-  max-width: 100%;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 .shift-grid-header-row,
 .shift-grid-body-row {
@@ -260,6 +261,8 @@ em {
   height: 43px;
 }
 .shift-grid-header-clip {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   border-bottom: 1px solid #9dafaf;
 }
@@ -296,6 +299,14 @@ em {
 }
 .shift-grid-name-cell .name {
   font-weight: 600;
+}
+.shift-grid-viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.shift-grid-viewport > div {
+  max-width: 100%;
 }
 .shift-cell {
   display: flex;
@@ -489,9 +500,12 @@ table.master-table { width: 100%; min-width: 760px; border-collapse: separate; b
 .weekly-requirements { margin-top: 0; }
 .weekly-requirements .field-label { max-width: 260px; }
 .weekly-requirements .field-label select { display: block; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #b9caca; border-radius: 4px; background: #fff; }
-.weekly-requirement-table { min-width: 760px !important; }
+.weekly-requirement-table { min-width: 840px !important; }
 .weekly-requirement-table th:not(:first-child), .weekly-requirement-table td { text-align: center; }
-.weekly-requirement-table .count { width: 58px; min-width: 58px; text-align: center; }
+.weekly-requirement-table th:first-child { width: 170px; }
+.weekly-requirement-table th small { display: block; margin-top: 3px; color: #587174; font-weight: 400; }
+.person-count { display: inline-flex; align-items: center; gap: 4px; color: #486568; font-size: 12px; }
+.weekly-requirement-table .count { width: 54px; min-width: 54px; text-align: center; }
 .lifecycle-details { margin-top: 16px; }
 .lifecycle-details summary { cursor: pointer; color: #1e666a; font-weight: 700; }
 .lifecycle-details > p { margin: 14px 0; font-size: 13px; }

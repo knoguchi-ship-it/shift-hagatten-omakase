@@ -380,6 +380,17 @@ export class ShiftDatabase {
   staffIncludingDeleted(): Staff[] {
     return this.db.prepare(`${STAFF_SELECT} ORDER BY s.id`).all() as Staff[];
   }
+  /** 在職者に加え、その月の履歴セルを持つ離職者だけを返す。 */
+  staffForMonth(month: string): Staff[] {
+    return this.db
+      .prepare(
+        `${STAFF_SELECT}
+         WHERE s.deleted_at IS NULL
+            OR s.id IN (SELECT DISTINCT staff_id FROM shifts WHERE target_date LIKE ?)
+         ORDER BY s.id`,
+      )
+      .all(`${month}%`) as Staff[];
+  }
   setStaffDeleted(id: number, deleted: boolean) {
     this.db
       .prepare("UPDATE staff SET deleted_at=? WHERE id=?")
@@ -812,6 +823,8 @@ export class ShiftDatabase {
   getMonth(month: string): MonthData {
     return {
       ...this.bootstrap(),
+      // 離職者は過去月の閲覧・Excel出力だけに残し、新規設定対象にはしない。
+      staff: this.staffForMonth(month),
       // 削除済みでも当月のセルが参照する勤務種別は、履歴表示・Excel出力用に返す。
       // 編集UI側は deletedAt を見て新規割当候補から除外する。
       shiftTypes: this.shiftTypesForMonth(month),
@@ -945,7 +958,7 @@ export class ShiftDatabase {
     const distinct = <T>(items: T[]) => [...new Map(items.map((item) => [JSON.stringify(item), item])).values()];
     return {
       month,
-      staff: data.staff,
+      staff: data.staff.filter((item) => !item.deletedAt),
       // 削除済み勤務種別は履歴表示専用であり、自動生成の候補にしない。
       shiftTypes: this.shiftTypes(),
       cells: data.cells,
