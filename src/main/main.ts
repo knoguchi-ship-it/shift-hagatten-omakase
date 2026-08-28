@@ -35,6 +35,7 @@ import {
 } from "./app-protocol";
 import type {
   Cell,
+  MonthlyConstraints,
   NgPair,
   RoleRequirement,
   SequenceRule,
@@ -404,6 +405,7 @@ app.whenReady().then(() => {
         shiftTypeId: number | null;
         isRequestHoliday?: number;
       }[];
+      monthlyConstraints?: MonthlyConstraints;
     },
     unknown
   >("app:save-conditions", SaveConditionsSchema, (payload) => database.saveConditions(payload));

@@ -429,6 +429,7 @@ main {
 .field-label { display: block; margin-bottom: 7px; font-size: 14px; font-weight: 700; }
 .action-card input[type="month"] { display: block; width: 100%; max-width: 260px; margin: 0 0 8px; padding: 10px; }
 .field-help { margin: 0 0 18px; font-size: 13px; }
+.inline-message { margin: 10px 0; color: #17676b; font-size: 13px; font-weight: 700; }
 .month-list { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
 .month-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #dce8e7; }
 .empty-state { color: #587174; }
@@ -489,6 +490,21 @@ table.master-table { width: 100%; min-width: 760px; border-collapse: separate; b
 .section-heading p:last-child { margin: 0 0 16px; color: #587174; font-size: 13px; }
 .conditions .grid-wrap { border-radius: 8px; max-height: min(58vh, 580px); }
 .conditions .form-row label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.monthly-constraints { display: grid; gap: 18px; }
+.monthly-constraints fieldset,
+.unavailable-group { margin: 0; padding: 16px; border: 1px solid #d8e4e2; border-radius: 8px; }
+.monthly-constraints legend,
+.unavailable-group legend { padding: 0 6px; color: #264b4e; font-size: 15px; font-weight: 700; }
+.monthly-constraints fieldset > p { margin: 0 0 12px; color: #587174; font-size: 13px; }
+.monthly-unavailable-table { display: grid; gap: 8px; }
+.monthly-unavailable-row { display: grid; grid-template-columns: minmax(110px, 180px) 1fr; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid #e4edec; }
+.monthly-unavailable-row > div { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.monthly-unavailable-row label,
+.unavailable-group label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.monthly-unavailable-row label span { color: #587174; font-size: 11px; }
+.unavailable-group { margin-top: 16px; }
+.unavailable-group .form-row { padding: 6px 0; border-top: 1px solid #e4edec; }
+.unavailable-group .form-row .name { min-width: 130px; font-weight: 700; }
 .editor .toolbar { padding: 20px; border: 1px solid #d8e4e2; border-radius: 10px; background: #fff; }
 .editor .shift-grid-wrap { width: 100%; border-radius: 8px; overflow: hidden; }
 .toast { z-index: 10; box-shadow: 0 6px 20px rgb(0 0 0 / 18%); }
@@ -518,4 +534,5 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .toolbar > div:last-child { width: 100%; }
   .toolbar > div:last-child button { flex: 1 1 140px; }
   .rule-row label, .rule-row select { width: 100%; }
+  .monthly-unavailable-row { grid-template-columns: 1fr; gap: 6px; }
 }

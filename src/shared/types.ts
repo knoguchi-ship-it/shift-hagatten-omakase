@@ -53,6 +53,12 @@ export type UnavailableCondition = {
   value: number;
 };
 
+export type MonthlyConstraints = {
+  ngPairs: NgPair[];
+  sequenceRules: SequenceRule[];
+  unavailableConditions: UnavailableCondition[];
+};
+
 export type ViolationType =
   | "UNASSIGNED"
   | "NG_PAIR"
@@ -91,6 +97,7 @@ export type Boot = {
 export type MonthData = Boot & {
   cells: Cell[];
   roleRequirements: RoleRequirement[];
+  monthlyConstraints: MonthlyConstraints;
 };
 
 export const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;

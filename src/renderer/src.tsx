@@ -6,6 +6,7 @@ import type {
   Boot,
   Cell,
   MonthData,
+  MonthlyConstraints,
   NgPair,
   Role,
   RoleRequirement,
@@ -362,6 +363,7 @@ function Conditions({
           shiftTypeId: c.shiftTypeId,
           isRequestHoliday: c.isRequestHoliday,
         })),
+        monthlyConstraints: data.monthlyConstraints,
       });
       onSaved(data);
       notify("条件を保存しました");
@@ -484,6 +486,48 @@ function Conditions({
         </table>
       </div>
       </section>
+      <MonthlyConstraintsPanel data={data} setData={setData} />
+    </section>
+  );
+}
+
+function MonthlyConstraintsPanel({
+  data,
+  setData,
+}: {
+  data: MonthData;
+  setData: (data: MonthData) => void;
+}) {
+  const monthly = data.monthlyConstraints;
+  const update = (change: Partial<MonthlyConstraints>) =>
+    setData({ ...data, monthlyConstraints: { ...monthly, ...change } });
+  const toggleUnavailable = (staffId: number, conditionType: "WEEKDAY" | "SHIFT_TYPE", value: number) => {
+    const exists = monthly.unavailableConditions.some((item) => item.staffId === staffId && item.conditionType === conditionType && item.value === value);
+    update({
+      unavailableConditions: exists
+        ? monthly.unavailableConditions.filter((item) => !(item.staffId === staffId && item.conditionType === conditionType && item.value === value))
+        : [...monthly.unavailableConditions, { staffId, conditionType, value }],
+    });
+  };
+  const staffName = (id: number) => data.staff.find((staff) => staff.id === id)?.name || "未入力の職員";
+  const typeName = (id: number) => data.shiftTypes.find((type) => type.id === id)?.name || "未入力の勤務種別";
+  return (
+    <section className="condition-card monthly-constraints" aria-labelledby="monthly-constraints-heading">
+      <div className="section-heading"><div><p className="step-badge">条件 3</p><h3 id="monthly-constraints-heading">この月だけの追加制約</h3><p>共通の制約とは別に、この月に限って追加するルールです。ここで追加した内容は他の月には反映されません。</p></div></div>
+      <fieldset><legend>この月だけのNGペア</legend><p>同じ日に勤務させない職員の組み合わせです。</p>
+        {monthly.ngPairs.map((pair, index) => <div className="rule-row" key={`${pair.staffId1}-${pair.staffId2}-${index}`}><label>職員A<select value={pair.staffId1} onChange={(e) => update({ ngPairs: monthly.ngPairs.map((item, i) => i === index ? { ...item, staffId1: Number(e.target.value) } : item) })}>{data.staff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></label><label>職員B<select value={pair.staffId2} onChange={(e) => update({ ngPairs: monthly.ngPairs.map((item, i) => i === index ? { ...item, staffId2: Number(e.target.value) } : item) })}>{data.staff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></label><button onClick={() => update({ ngPairs: monthly.ngPairs.filter((_, i) => i !== index) })}>{staffName(pair.staffId1)} と {staffName(pair.staffId2)} の設定を削除</button></div>)}
+        <button disabled={data.staff.length < 2} onClick={() => update({ ngPairs: [...monthly.ngPairs, { staffId1: data.staff[0].id, staffId2: data.staff[1].id }] })}>この月のNGペアを追加</button>
+      </fieldset>
+      <fieldset><legend>この月だけの翌日ルール</legend><p>例：研修の翌日は日勤にしない、など、この月だけの勤務種別の連続条件です。</p>
+        {monthly.sequenceRules.map((rule, index) => <div className="rule-row" key={`${rule.firstShiftTypeId}-${rule.secondShiftTypeId}-${index}`}><label>前日<select value={rule.firstShiftTypeId} onChange={(e) => update({ sequenceRules: monthly.sequenceRules.map((item, i) => i === index ? { ...item, firstShiftTypeId: Number(e.target.value) } : item) })}>{data.shiftTypes.filter((type) => !type.deletedAt).map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label><label>翌日<select value={rule.secondShiftTypeId} onChange={(e) => update({ sequenceRules: monthly.sequenceRules.map((item, i) => i === index ? { ...item, secondShiftTypeId: Number(e.target.value) } : item) })}>{data.shiftTypes.filter((type) => !type.deletedAt).map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label><button onClick={() => update({ sequenceRules: monthly.sequenceRules.filter((_, i) => i !== index) })}>{typeName(rule.firstShiftTypeId)} → {typeName(rule.secondShiftTypeId)} を削除</button></div>)}
+        <button disabled={data.shiftTypes.filter((type) => !type.deletedAt).length < 2} onClick={() => { const available = data.shiftTypes.filter((type) => !type.deletedAt); update({ sequenceRules: [...monthly.sequenceRules, { firstShiftTypeId: available[0].id, secondShiftTypeId: available[1].id }] }); }}>この月の翌日ルールを追加</button>
+      </fieldset>
+      <fieldset><legend>この月だけの勤務不可曜日</legend><p>曜日単位の希望・不可条件です。勤務種別とは別に設定します。</p><div className="monthly-unavailable-table">
+        {data.staff.map((staff) => <div className="monthly-unavailable-row" key={staff.id}><strong>{staff.name}</strong><div>{WEEKDAY_LABELS.map((label, weekday) => <label key={weekday}><input type="checkbox" checked={monthly.unavailableConditions.some((item) => item.staffId === staff.id && item.conditionType === "WEEKDAY" && item.value === weekday)} onChange={() => toggleUnavailable(staff.id, "WEEKDAY", weekday)} />{label}</label>)}</div></div>)}
+      </div></fieldset>
+      <fieldset><legend>この月だけの勤務不可種別</legend><p>職員ごとに、今月だけ割り当てない勤務種別を選びます。</p><div className="monthly-unavailable-table">
+        {data.staff.map((staff) => <div className="monthly-unavailable-row" key={staff.id}><strong>{staff.name}</strong><div>{data.shiftTypes.filter((type) => !type.deletedAt).map((type) => <label key={type.id}><input type="checkbox" checked={monthly.unavailableConditions.some((item) => item.staffId === staff.id && item.conditionType === "SHIFT_TYPE" && item.value === type.id)} onChange={() => toggleUnavailable(staff.id, "SHIFT_TYPE", type.id)} />{type.shortName} <span>{type.name}</span></label>)}</div></div>)}
+      </div></fieldset>
     </section>
   );
 }
@@ -935,9 +979,18 @@ function Editor({
     </section>
   );
 }
-function RolesPanel({ staff, onChanged }: { staff: Staff[]; onChanged: () => Promise<void> }) {
+function RolesPanel({
+  staff,
+  onChanged,
+  onError,
+}: {
+  staff: Staff[];
+  onChanged: () => Promise<void>;
+  onError?: (message: string) => void;
+}) {
   const [roles, setRoles] = useState<Role[]>([]);
   const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
   const reload = async () => setRoles(await window.shiftApi.listRoles(true));
   useEffect(() => {
     reload();
@@ -965,25 +1018,41 @@ function RolesPanel({ staff, onChanged }: { staff: Staff[]; onChanged: () => Pro
     <div className="settings">
       <div>
         <h3>職種マスタ</h3>
-        <div className="form-row">
+        <form
+          className="form-row"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const trimmed = name.trim();
+            if (!trimmed) {
+              setMessage("職種名を入力してください。");
+              return;
+            }
+            try {
+              const updated = await window.shiftApi.saveRole({ name: trimmed });
+              setRoles(updated);
+              setName("");
+              setMessage(`「${trimmed}」を追加しました。`);
+              await onChanged();
+            } catch {
+              const error = "職種を追加できませんでした。同じ名前が登録済みでないか確認してください。";
+              setMessage(error);
+              onError?.(error);
+            }
+          }}
+        >
           <input
             value={name}
             placeholder="例：介護職"
             aria-label="追加する職種名"
+            aria-describedby="role-add-help"
             onChange={(e) => setName(e.target.value)}
           />
-          <button
-            onClick={async () => {
-              if (!name.trim()) return;
-              await window.shiftApi.saveRole({ name });
-              setName("");
-              reload();
-              await onChanged();
-            }}
-          >
+          <button type="submit">
             追加
           </button>
-        </div>
+        </form>
+        <p id="role-add-help" className="field-help">例：介護職、看護職。追加後、職員の「主職種」と必要人数の設定で選べます。</p>
+        {message && <p className="inline-message" role="status">{message}</p>}
         {roles.map((role) => (
           <div className="form-row" key={role.id}>
             <input
@@ -1184,7 +1253,10 @@ function UnavailablePanel({
   return (
     <div className="settings">
       <div>
-        <h3>勤務不可曜日・勤務不可種別</h3>
+        <h3>共通の勤務不可条件</h3>
+        <p>全ての月に適用する条件です。曜日と勤務種別は別々に設定します。</p>
+        <fieldset className="unavailable-group">
+          <legend>勤務不可曜日</legend>
         {staff.map((s) => (
           <div className="form-row" key={s.id}>
             <span className="name">{s.name}</span>
@@ -1205,6 +1277,14 @@ function UnavailablePanel({
                 </label>
               ))}
             </span>
+          </div>
+        ))}
+        </fieldset>
+        <fieldset className="unavailable-group">
+          <legend>勤務不可種別</legend>
+        {staff.map((s) => (
+          <div className="form-row" key={s.id}>
+            <span className="name">{s.name}</span>
             <span>
               {shiftTypes.map((t) => (
                 <label key={t.id}>
@@ -1224,6 +1304,7 @@ function UnavailablePanel({
             </span>
           </div>
         ))}
+        </fieldset>
       </div>
     </div>
   );
@@ -1281,7 +1362,7 @@ function LegacySettings({
     <section>
       <h2>マスタ・ルール設定</h2>
       <p>ここで設定した内容はすべてこのPC内に保存されます。</p>
-      <RolesPanel staff={staff} onChanged={onMasterChanged} />
+      <RolesPanel staff={staff} onChanged={onMasterChanged} onError={onError} />
       <StaffLifecyclePanel onChanged={onMasterChanged} />
       <ShiftTypeLifecyclePanel onChanged={onMasterChanged} />
       <div className="settings">
@@ -1718,7 +1799,7 @@ function Settings({
           ))}
         </nav>
         <div className="master-content">
-          {section === "roles" && <RolesPanel staff={staff} onChanged={onMasterChanged} />}
+          {section === "roles" && <RolesPanel staff={staff} onChanged={onMasterChanged} onError={onError} />}
           {section === "staff" && (
             <>
               <section className="master-panel" aria-labelledby="staff-master-heading">

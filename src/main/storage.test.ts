@@ -229,6 +229,50 @@ describe("ShiftDatabase condition saving", () => {
     expect(db.getMonth("2026-10").roleRequirements).toHaveLength(0);
     expect(db.getMonth("2026-10").cells.find((cell) => cell.staffId === staff.id)?.shiftTypeId).toBeNull();
   });
+
+  it("keeps month-only constraints separate from the common master constraints and uses them for generation", () => {
+    const db = open(path.join(dir, "monthly-constraints.sqlite"));
+    db.saveSettings({
+      staff: [
+        { id: 0, name: "Aさん", roleId: null, roleName: "", employmentType: "常勤", minDays: null, maxDays: null },
+        { id: 0, name: "Bさん", roleId: null, roleName: "", employmentType: "非常勤", minDays: null, maxDays: null },
+      ],
+    });
+    const month = "2026-10";
+    const data = db.createMonth(month);
+    const [a, b] = db.staff();
+    const [first, second] = db.shiftTypes();
+
+    db.saveConditions({
+      roleRequirements: [],
+      changes: data.cells.map((cell) => ({ ...cell })),
+      monthlyConstraints: {
+        ngPairs: [{ staffId1: a.id, staffId2: b.id }],
+        sequenceRules: [{ firstShiftTypeId: first.id, secondShiftTypeId: second.id }],
+        unavailableConditions: [
+          { staffId: a.id, conditionType: "WEEKDAY", value: 0 },
+          { staffId: b.id, conditionType: "SHIFT_TYPE", value: first.id },
+        ],
+      },
+    });
+
+    expect(db.ngPairs()).toEqual([]);
+    expect(db.getMonth(month).monthlyConstraints).toEqual({
+      ngPairs: [{ staffId1: a.id, staffId2: b.id }],
+      sequenceRules: [{ firstShiftTypeId: first.id, secondShiftTypeId: second.id }],
+      unavailableConditions: expect.arrayContaining([
+        { staffId: a.id, conditionType: "WEEKDAY", value: 0 },
+        { staffId: b.id, conditionType: "SHIFT_TYPE", value: first.id },
+      ]),
+    });
+    const input = db.getGenerationInput(month);
+    expect(input.ngPairs).toContainEqual({ staffId1: a.id, staffId2: b.id });
+    expect(input.sequenceRules).toContainEqual({ firstShiftTypeId: first.id, secondShiftTypeId: second.id });
+    expect(input.unavailableConditions).toEqual(expect.arrayContaining([
+      { staffId: a.id, conditionType: "WEEKDAY", value: 0 },
+      { staffId: b.id, conditionType: "SHIFT_TYPE", value: first.id },
+    ]));
+  });
 });
 
 describe("ShiftDatabase configuration saving", () => {

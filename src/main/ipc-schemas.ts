@@ -73,6 +73,11 @@ export const UpdateCellsSchema = z.object({ changes: z.array(CellChangeSchema) }
 export const SaveConditionsSchema = z.object({
   roleRequirements: z.array(RoleRequirementSchema),
   changes: z.array(CellChangeSchema),
+  monthlyConstraints: z.object({
+    ngPairs: z.array(NgPairSchema),
+    sequenceRules: z.array(SequenceRuleSchema),
+    unavailableConditions: z.array(UnavailableConditionSchema),
+  }).optional(),
 });
 export const CellSchema = z.object({
   targetDate: DateKeySchema,
